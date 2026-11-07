@@ -8,7 +8,7 @@
  * Layout: one column on narrow cards, desktop layout from DESKTOP_WIDTH (container query).
  */
 
-const VERSION = "0.2.0-beta.1";
+const VERSION = "0.2.0-beta.2";
 const WS = "essential_budget";
 const PERSONS = ["a", "b"];
 const PERSON_COLORS = { a: "#2f6fde", b: "#d9822b", shared: "#7a8794" };
@@ -221,10 +221,14 @@ const parseAmount = (text) => {
   return Number.isFinite(value) ? value : null;
 };
 
-/** True if the card is shown in the preview of the dashboard card editor (also across shadow roots). */
+/**
+ * True if the card is shown in the preview of the card editor dialog (searched across shadow roots).
+ * The "preview" property of cards is not used for this: Home Assistant also sets it for every card
+ * while the dashboard itself is in edit mode.
+ */
 const inCardEditor = (el) => {
   for (let n = el; n; n = n.parentNode || n.host) {
-    if (/^(HUI-CARD-PREVIEW|HUI-DIALOG-EDIT-CARD|HUI-CARD-ELEMENT-EDITOR)$/.test(n.tagName || "")) return true;
+    if (n.tagName === "HUI-DIALOG-EDIT-CARD") return true;
   }
   return false;
 };
@@ -341,21 +345,28 @@ class EssentialBudgetCard extends HTMLElement {
     if (this._hass) this._render();
   }
 
-  /** Set by Home Assistant for the preview in the card editor: there the card opens in edit mode. */
+  /** Set by Home Assistant in the card editor and while the dashboard is edited: only a reason to check again. */
   set preview(value) {
     this._preview = !!value;
-    if (this._autoEdit()) this._render();
-  }
-
-  get _inEditor() {
-    return this._preview || inCardEditor(this);
+    this._syncEdit();
   }
 
   /** Starts the edit mode in the card editor preview; true if it did. */
   _autoEdit() {
-    if (this._draft || !this._data || !this._isAdmin || !this._inEditor) return false;
+    if (this._draft || !this._data || !this._isAdmin || !inCardEditor(this)) return false;
     this._startEdit();
     return true;
+  }
+
+  /** Edit mode only inside the card editor dialog: start it there, leave it (discarding) anywhere else. */
+  _syncEdit() {
+    if (this._autoEdit()) {
+      this._render();
+    } else if (this._draft && !inCardEditor(this)) {
+      this._draft = null;
+      this._saveError = null;
+      this._load(); // show the current budget, it may have been saved in the card editor meanwhile
+    }
   }
 
   set hass(hass) {
@@ -367,8 +378,9 @@ class EssentialBudgetCard extends HTMLElement {
     if (first) {
       this._load();
       this._subscribe();
-    } else if (langChanged && !this._draft) {
-      this._render();
+    } else {
+      this._syncEdit();
+      if (langChanged && !this._draft) this._render();
     }
   }
 
@@ -382,7 +394,7 @@ class EssentialBudgetCard extends HTMLElement {
 
   connectedCallback() {
     if (this._hass) this._subscribe();
-    if (this._autoEdit()) this._render();
+    this._syncEdit();
   }
 
   disconnectedCallback() {

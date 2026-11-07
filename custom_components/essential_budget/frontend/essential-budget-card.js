@@ -958,7 +958,6 @@ class EssentialBudgetCard extends HTMLElement {
             ? `<div class="items">${g.items
                 .map(
                   (c) => `<div class="item"><div class="item-main"><span class="ellipsis" title="${esc(c.name)}">${esc(c.name)}</span>
-                  <span class="item-freq">${esc(this._freq(c.interval_months))}</span>
                   <span class="bar thin"><i style="width:${maxItem ? (c.monthly / maxItem) * 100 : 0}%;background:${g.color}"></i></span></div>
                   <span class="item-value">${this._num(c.monthly)}</span></div>`
                 )
@@ -1371,7 +1370,6 @@ const STYLE = `
   .items { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 14px 44px; }
   .item { display: flex; align-items: center; gap: 12px; min-height: 48px; font-size: 14px; padding-right: 32px; }
   .item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
-  .item-freq { font-size: 12px; color: var(--secondary-text-color); }
   .item-value { width: 76px; text-align: right; font-variant-numeric: tabular-nums; }
 
   /* Detail page: list on narrow cards, table on wide ones */

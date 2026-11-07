@@ -1,0 +1,27 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Essential Budget",
+        "description": "The budget is shared by two persons. Enter their names; income and fixed costs are edited in the budget card afterwards. The data is saved in essential_budget.json in your config folder.",
+        "data": {
+          "person_a": "First person",
+          "person_b": "Second person"
+        }
+      }
+    },
+    "error": {
+      "empty": "Please enter a name",
+      "too_long": "At most 40 characters"
+    },
+    "abort": {
+      "single_instance_allowed": "Essential Budget is already set up"
+    }
+  },
+  "issues": {
+    "invalid_file": {
+      "title": "Budget file could not be read",
+      "description": "{file} could not be read: {error}\n\nFix the file (or restore it from a backup) and restart Home Assistant. Until then the budget card shows an error and nothing can be saved, so the file is not overwritten."
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Essential Budget einrichten",
+        "description": "Das Budget gehört zwei Personen. Trag ihre Namen ein; Einnahmen und Fixkosten bearbeitest du danach in der Budget-Karte. Die Daten liegen in essential_budget.json im config-Ordner.",
+        "data": {
+          "person_a": "Erste Person",
+          "person_b": "Zweite Person"
+        }
+      }
+    },
+    "error": {
+      "empty": "Bitte einen Namen eingeben",
+      "too_long": "Höchstens 40 Zeichen"
+    },
+    "abort": {
+      "single_instance_allowed": "Essential Budget ist bereits eingerichtet"
+    }
+  },
+  "issues": {
+    "invalid_file": {
+      "title": "Budget-Datei konnte nicht gelesen werden",
+      "description": "{file} konnte nicht gelesen werden: {error}\n\nKorrigiere die Datei (oder stelle sie aus einem Backup wieder her) und starte Home Assistant neu. Bis dahin zeigt die Budget-Karte einen Fehler und Speichern ist gesperrt, damit die Datei nicht überschrieben wird."
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "domain": "essential_budget",
+  "name": "Essential Budget",
+  "codeowners": [
+    "@beatschubser"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "http",
+    "frontend",
+    "lovelace",
+    "websocket_api"
+  ],
+  "documentation": "https://github.com/beatschubser/ha-essential-budget",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/beatschubser/ha-essential-budget/issues",
+  "requirements": [],
+  "single_config_flow": true,
+  "version": "0.1.0-beta.1"
+}

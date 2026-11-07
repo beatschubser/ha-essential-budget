@@ -16,7 +16,7 @@ A static household budget for Home Assistant, for one or two persons: monthly ne
 - **Annual gross** in its own box, per person: 12 × the monthly gross of the income + the gross of the special payments
 - **Own edit page:** income and fixed costs are edited on their own page, the card on the dashboard only shows the budget (administrators only, no sidebar entry)
 - **Privacy mode** (optional): all numbers are blurred until you tap one of the key figures; they are hidden again after a set time (default 30 seconds), when the app or browser tab goes to the background and when you tap again
-- Desktop layout on wide cards (income on the left, expenses on the right), one column on phones; follows the colors of your theme
+- Desktop layout on wide cards (income, annual gross and budget per person on the left, fixed costs on the right), one column on phones; follows the colors of your theme
 - English and German; amounts stored with cents and shown in whole units of the currency set in Home Assistant (Settings > System > General)
 
 ## Installation

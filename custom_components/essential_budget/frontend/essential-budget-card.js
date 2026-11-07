@@ -981,11 +981,11 @@ class EssentialBudgetCard extends HTMLElement {
         .join("")}</div>`;
 
     // With one person the budget per person equals the budget: no extra box.
-    // Left column: everything that comes in (net, annual gross); right column: everything that goes out
+    // Left column: income (net, annual gross) and the budget per person; right column: fixed costs
     const gross = `<div class="box">${this._section("mdi:calendar-range", this.t("annual_gross"), this._num(sum(grossPeople.map((p) => p.gross))))}
       <div class="blocks">${grossPeople.map((p) => block(p.name, p.color, p.gross, null, grossLines(p))).join("")}</div></div>`;
-    const left = income + (grossPeople.length ? gross : "");
-    const right = costs + (m.single ? "" : perPerson);
+    const left = income + (grossPeople.length ? gross : "") + (m.single ? "" : perPerson);
+    const right = costs;
     return `${this._header()}${kpis}<div class="columns"><div class="column">${left}</div><div class="column">${right}</div></div>`;
   }
 
@@ -1326,7 +1326,7 @@ const STYLE = `
   .kpis.detail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .kpi.small .value { font-size: 18px; }
 
-  /* narrow: one column (income, annual gross, fixed costs, budget per person); wide: income left, costs right */
+  /* narrow: one column (income, annual gross, budget per person, fixed costs); wide: income left, costs right */
   .columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
   .column { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 

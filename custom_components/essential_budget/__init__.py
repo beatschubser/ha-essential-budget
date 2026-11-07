@@ -2,7 +2,7 @@
 
 Setup overview:
 - async_setup (once): register the WebSocket commands and serve the card.
-- async_setup_entry (one entry only): read /config/essential_budget.json (created if missing).
+- async_setup_entry (one entry only): read /config/.storage/essential_budget.json (created if missing).
   The data is edited in the card; manual changes to the file are read at the next start.
 """
 

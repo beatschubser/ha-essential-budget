@@ -35,7 +35,7 @@ To enter or change the budget, edit the dashboard and open the card: the preview
 
 ## Your data
 
-Everything is stored in **`essential_budget.json`** in your Home Assistant config folder, as readable JSON:
+Everything is stored in **`.storage/essential_budget.json`** in your Home Assistant config folder, as readable JSON:
 
 ```json
 {
@@ -55,7 +55,7 @@ Everything is stored in **`essential_budget.json`** in your Home Assistant confi
 - `amount` of a fixed cost is the amount **per payment**; `payments_per_year` is 1 (yearly) to 12 (monthly)
 - `annual_gross` of an income item is optional and appears with the annual gross values
 - `"b": ""` means a budget of one person; then every entry belongs to person `a`
-- You can edit the file by hand; the changes are read when Home Assistant starts. If the file cannot be read, the card shows an error, a repair notice appears and saving is blocked until the file is fixed, so it is never overwritten by accident
+- You can edit the file by hand (best while Home Assistant is stopped); the changes are read when Home Assistant starts. If the file cannot be read, the card shows an error, a repair notice appears and saving is blocked until the file is fixed, so it is never overwritten by accident
 - The file is part of every Home Assistant backup. Removing the integration keeps the file
 - Everyone who can open the dashboard can see the budget; only administrators can edit it
 

@@ -1,4 +1,4 @@
-"""The budget file /config/essential_budget.json: read at startup, written on every save from the card."""
+"""The budget file /config/.storage/essential_budget.json: read at startup, written on every save from the card."""
 
 from __future__ import annotations
 
@@ -77,4 +77,8 @@ class BudgetStore:
 
     async def _async_write(self, data: dict[str, Any]) -> None:
         text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
-        await self.hass.async_add_executor_job(write_utf8_file_atomic, str(self.path), text)
+        await self.hass.async_add_executor_job(self._write, text)
+
+    def _write(self, text: str) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        write_utf8_file_atomic(str(self.path), text)

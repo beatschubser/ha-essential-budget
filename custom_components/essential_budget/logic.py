@@ -1,6 +1,6 @@
 """Budget data: default content and validation. No Home Assistant imports (tested with tests/test_logic.py).
 
-File format (essential_budget.json), amounts in the currency of Home Assistant with cents:
+File format (.storage/essential_budget.json), amounts in the currency of Home Assistant with cents:
 
 {
   "version": 1,

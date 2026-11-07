@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up Essential Budget",
-        "description": "Enter the names of the persons sharing the budget; leave the second name empty for a budget of one person. Income and fixed costs are edited in the budget card afterwards. The data is saved in essential_budget.json in your config folder.",
+        "description": "Enter the names of the persons sharing the budget; leave the second name empty for a budget of one person. Income and fixed costs are edited in the budget card afterwards. The data is saved in .storage/essential_budget.json in your config folder.",
         "data": {
           "person_a": "Person",
           "person_b": "Second person (optional)"

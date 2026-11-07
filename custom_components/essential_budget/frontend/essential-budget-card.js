@@ -459,7 +459,11 @@ class EssentialBudgetCard extends HTMLElement {
   }
 
   connectedCallback() {
-    if (this._hass) this._subscribe();
+    if (this._hass) {
+      this._subscribe();
+      // the budget may have been saved on the edit page while this card was not shown (no updates then)
+      if (this._data && !this._draft) this._load();
+    }
     document.addEventListener("visibilitychange", this._onVisibility);
     this._syncEdit();
   }

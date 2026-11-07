@@ -5,14 +5,14 @@ File format (essential_budget.json), amounts in the currency of Home Assistant w
 {
   "version": 1,
   "persons": {"a": "Alex", "b": "Sam"},   (an empty name for "b" = budget of one person)
-  "income": [{"name": "Salary", "person": "a", "amount": 3150.0}],
+  "income": [{"name": "Salary", "person": "a", "amount": 3150.0, "annual_gross": 58000.0}],
   "shared_income": [{"name": "Child benefit", "to": "a", "amount": 518.0}],
   "fixed_costs": [{"name": "Rent", "category": "Home", "person": "a", "amount": 1480.0, "payments_per_year": 12}],
   "annual_gross": [{"name": "Gross salary Alex", "amount": 58000.0}],
   "bonuses": [{"name": "Annual bonus", "amount": 3200.0}]
 }
 
-- income: net income per month of one person
+- income: net income per month of one person; "annual_gross" is optional and shown with the annual gross values
 - shared_income: income of both (e.g. child benefit); "to" = the person whose account receives it
 - fixed_costs: amount per payment, paid "payments_per_year" times a year (1 to 12); "person" pays it
 - annual_gross, bonuses: free yearly values (bonuses are net and part of the annual gross)
@@ -35,7 +35,7 @@ MAX_AMOUNT = 100_000_000
 
 # Fields of every list, in the order they are written to the file
 LISTS = {
-    "income": ("name", "person", "amount"),
+    "income": ("name", "person", "amount", "annual_gross"),
     "shared_income": ("name", "to", "amount"),
     "fixed_costs": ("name", "category", "person", "amount", "payments_per_year"),
     "annual_gross": ("name", "amount"),
@@ -107,7 +107,10 @@ def _item(list_key: str, raw: Any, index: int, persons: tuple[str, ...]) -> dict
     item: dict[str, Any] = {"name": name}
     for field in LISTS[list_key][1:]:
         value = raw.get(field)
-        if field == "amount":
+        if field == "annual_gross":
+            if value not in (None, ""):  # optional: only written when set
+                item[field] = _amount(value, f"{where}: annual_gross")
+        elif field == "amount":
             item[field] = _amount(0 if value in (None, "") else value, f"{where}: amount")
         elif field in ("person", "to"):
             item[field] = _person(value, f"{where}: {field}", persons)

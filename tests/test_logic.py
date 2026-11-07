@@ -10,7 +10,7 @@ from logic import BudgetError, default_data, monthly, totals, validate  # noqa: 
 SAMPLE = {
     "persons": {"a": "  Alex ", "b": "Sam"},
     "income": [
-        {"name": "Salary", "person": "a", "amount": 3150},
+        {"name": "Salary", "person": "a", "amount": 3150, "annual_gross": 58000},
         {"name": "Side job", "person": "a", "amount": 450.004},
         {"name": "Salary", "person": "b", "amount": 2480},
         {"name": "", "person": "b", "amount": 0},  # empty row: dropped
@@ -33,6 +33,9 @@ def test_validate_cleans() -> None:
     assert data["persons"] == {"a": "Alex", "b": "Sam"}
     assert len(data["income"]) == 3
     assert data["income"][1]["amount"] == 450.0
+    assert data["income"][0]["annual_gross"] == 58000.0
+    assert "annual_gross" not in data["income"][1]  # optional, not written when empty
+    assert "annual_gross" not in validate({"income": [{"name": "X", "person": "a", "amount": 1, "annual_gross": ""}]})["income"][0]
     assert data["fixed_costs"][2]["category"] == "Home"
     assert "unknown" not in data
     assert list(data["fixed_costs"][0]) == ["name", "category", "person", "amount", "payments_per_year"]
@@ -72,6 +75,7 @@ def test_invalid() -> None:
         ({"bonuses": [{"name": "X", "amount": True}]}, "bonuses 1: amount"),
         ({"shared_income": [{"name": "X", "amount": 1}]}, "shared_income 1: to"),
         ({"bonuses": {}}, "bonuses: list"),
+        ({"income": [{"name": "X", "person": "a", "amount": 1, "annual_gross": -5}]}, "income 1: annual_gross"),
         ([], "object expected"),
     ]
     for data, expected in cases:

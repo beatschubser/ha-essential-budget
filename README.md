@@ -8,11 +8,11 @@ A static household budget for Home Assistant, for one or two persons: monthly ne
 
 - **Key figures:** income, fixed costs (with their share of the income) and the budget after fixed costs, per month
 - **One or two persons:** leave the name of the second person empty for a budget of one person
-- **Income (net):** any number of income items per person, plus shared income such as child benefit (each assigned to the account of one person)
+- **Income (net):** any number of income items per person, each optionally with its annual gross, plus shared income such as child benefit (each assigned to the account of one person)
 - **Fixed costs:** free categories, paid by one of the persons, paid 1 to 12 times a year. All costs are converted to a monthly value (a yearly payment counts with one twelfth)
 - **Categories** sorted by size with share and bar; expand a category to see its items, or open it for all details (amount per payment, per month, per year)
 - **Budget per person** (with two persons): own income + shared income received by the person − fixed costs paid by the person; negative values are shown in red
-- **Annual gross** and **bonuses (net)** as free yearly values with totals
+- **Annual gross:** the annual gross entered with the income items plus free yearly values, with total; **bonuses (net)** as free yearly values
 - **Edit mode** directly in the card (pencil button, administrators only)
 - Desktop layout on wide cards, one column on phones; follows the colors of your theme
 - English and German; amounts in the currency of Home Assistant, stored with cents and shown in whole units
@@ -40,18 +40,19 @@ Everything is stored in **`essential_budget.json`** in your Home Assistant confi
 {
   "version": 1,
   "persons": { "a": "Alex", "b": "Sam" },
-  "income": [{ "name": "Salary", "person": "a", "amount": 3150.0 }],
+  "income": [{ "name": "Salary", "person": "a", "amount": 3150.0, "annual_gross": 58000.0 }],
   "shared_income": [{ "name": "Child benefit", "to": "a", "amount": 255.0 }],
   "fixed_costs": [
     { "name": "Rent", "category": "Home", "person": "a", "amount": 1480.0, "payments_per_year": 12 },
     { "name": "Liability insurance", "category": "Insurance", "person": "b", "amount": 89.0, "payments_per_year": 1 }
   ],
-  "annual_gross": [{ "name": "Gross salary Alex", "amount": 58000.0 }],
+  "annual_gross": [{ "name": "Capital gains", "amount": 600.0 }],
   "bonuses": [{ "name": "Annual bonus", "amount": 3200.0 }]
 }
 ```
 
 - `amount` of a fixed cost is the amount **per payment**; `payments_per_year` is 1 (yearly) to 12 (monthly)
+- `annual_gross` of an income item is optional and appears with the annual gross values
 - `"b": ""` means a budget of one person; then every entry belongs to person `a`
 - You can edit the file by hand; the changes are read when Home Assistant starts. If the file cannot be read, the card shows an error, a repair notice appears and saving is blocked until the file is fixed, so it is never overwritten by accident
 - The file is part of every Home Assistant backup. Removing the integration keeps the file

@@ -8,7 +8,7 @@
  * Layout: one column on narrow cards, desktop layout from DESKTOP_WIDTH (container query).
  */
 
-const VERSION = "0.1.0-beta.4";
+const VERSION = "0.1.0";
 const WS = "essential_budget";
 const PERSONS = ["a", "b"];
 const PERSON_COLORS = { a: "#2f6fde", b: "#d9822b", shared: "#7a8794" };
@@ -16,6 +16,7 @@ const PERSON_COLORS = { a: "#2f6fde", b: "#d9822b", shared: "#7a8794" };
 const PALETTE = ["#2f6fde", "#7c5cd6", "#d9822b", "#1f8f74", "#b0436e", "#0e7c99", "#8a6d1f", "#a23b3b", "#4b8b2f", "#5f6b78"];
 const FREQUENCIES = [12, 6, 4, 3, 2, 1]; // offered first in the edit mode; any value from 1 to 12 is valid
 const LISTS = ["income", "shared_income", "fixed_costs", "annual_gross", "bonuses"];
+const AMOUNT_FIELDS = ["amount", "annual_gross"]; // text fields in the edit mode that hold amounts
 
 /* ---------------------------------------------------------------------
  * Texts (English is the fallback)
@@ -60,6 +61,8 @@ const TEXTS = {
     name_of: "Name of person {n}",
     name_of_optional: "Name of person {n} (optional)",
     person_n: "Person {n}",
+    net_per_month: "Net per month",
+    gross_optional: "Annual gross (optional)",
     one_person_hint: "Leave the second name empty for a budget of one person.",
     second_person_in_use: "The second person still has income. Remove it or enter a name for the second person.",
     shared_income: "Shared income",
@@ -119,6 +122,8 @@ const TEXTS = {
     name_of: "Name Person {n}",
     name_of_optional: "Name Person {n} (optional)",
     person_n: "Person {n}",
+    net_per_month: "Netto pro Monat",
+    gross_optional: "Jahresbrutto (optional)",
     one_person_hint: "Für das Budget einer einzelnen Person bleibt der zweite Name leer.",
     second_person_in_use: "Die zweite Person hat noch Einnahmen. Entferne sie oder trag einen Namen für die zweite Person ein.",
     shared_income: "Geteilte Einnahmen",
@@ -256,6 +261,14 @@ const buildModel = (data) => {
     })
     .sort((a, b) => b.sum - a.sum);
 
+  // Annual gross: values entered with the income items first, then the free values
+  const gross = [
+    ...data.income
+      .filter((i) => i.annual_gross != null && active.includes(i.person))
+      .map((i) => ({ name: active.length > 1 ? `${i.name} (${data.persons[i.person]})` : i.name, amount: i.annual_gross })),
+    ...data.annual_gross,
+  ];
+
   const budgetPerPerson = active.map((p) => {
     const own = sum(data.income.filter((i) => i.person === p).map((i) => i.amount));
     const shared = sum(data.shared_income.filter((i) => i.to === p).map((i) => i.amount));
@@ -273,8 +286,8 @@ const buildModel = (data) => {
     budget: incomeTotal - costTotal,
     budgetPerPerson,
     single: active.length === 1,
-    gross: data.annual_gross,
-    grossSum: sum(data.annual_gross.map((i) => i.amount)),
+    gross,
+    grossSum: sum(gross.map((i) => i.amount)),
     bonuses: data.bonuses,
     bonusSum: sum(data.bonuses.map((i) => i.amount)),
     empty: LISTS.every((k) => !data[k].length),
@@ -466,7 +479,13 @@ class EssentialBudgetCard extends HTMLElement {
       new Intl.NumberFormat(this._locale, { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false }).format(v);
     const d = this._data;
     this._draft = { persons: { ...d.persons } };
-    for (const list of LISTS) this._draft[list] = d[list].map((item) => ({ ...item, amount: amount(item.amount), _id: uid() }));
+    for (const list of LISTS)
+      this._draft[list] = d[list].map((item) => ({
+        ...item,
+        amount: amount(item.amount),
+        ...(list === "income" ? { annual_gross: item.annual_gross != null ? amount(item.annual_gross) : "" } : {}),
+        _id: uid(),
+      }));
     this._detail = null;
     this._saveError = null;
   }
@@ -503,7 +522,7 @@ class EssentialBudgetCard extends HTMLElement {
   }
 
   _onBlur(e) {
-    if (this._draft && e.target.dataset?.field === "amount") this._markField(e.target);
+    if (this._draft && AMOUNT_FIELDS.includes(e.target.dataset?.field)) this._markField(e.target);
   }
 
   _markField(el) {
@@ -517,10 +536,18 @@ class EssentialBudgetCard extends HTMLElement {
       data[list] = this._draft[list].map(({ _id, ...row }) => {
         const amount = parseAmount(row.amount);
         if (amount === null) invalid = true;
-        return { ...row, amount: amount ?? 0 };
+        const result = { ...row, amount: amount ?? 0 };
+        if ("annual_gross" in row) {
+          // optional: an empty field means no annual gross for this income
+          const gross = String(row.annual_gross ?? "").trim() === "" ? null : parseAmount(row.annual_gross);
+          if (gross === null) delete result.annual_gross;
+          else result.annual_gross = gross;
+          if (gross === null && String(row.annual_gross ?? "").trim() !== "") invalid = true;
+        }
+        return result;
       });
     }
-    this._root.querySelectorAll('[data-field="amount"]').forEach((el) => this._markField(el));
+    this._root.querySelectorAll(AMOUNT_FIELDS.map((f) => `[data-field="${f}"]`).join(",")).forEach((el) => this._markField(el));
     if (activePersons(data.persons).length === 1) {
       // without a second person everything belongs to the first one; income of the second person must be moved or removed first
       if (data.income.some((r) => r.person === "b")) {
@@ -718,15 +745,23 @@ class EssentialBudgetCard extends HTMLElement {
         `<label class="field"><span>${esc(this.t(p === "a" ? "name_of" : "name_of_optional", { n: i + 1 }))}</span><input type="text" data-list="persons" data-field="${p}" value="${esc(d.persons[p])}"></label>`
     ).join("")}</div><div class="hint flat">${esc(this.t("one_person_hint"))}</div></div>`;
 
+    // column headers, only shown on wide cards
+    const head = (cls, cols) => `<div class="erow ${cls} ehead">${cols.map(([f, label]) => `<span class="f-${f}">${esc(label)}</span>`).join("")}</div>`;
     // the second person's income stays visible while it has entries, so it can be removed after clearing the name
     const incomePersons = PERSONS.filter((p) => active.includes(p) || d.income.some((r) => r.person === p));
     const income = `<div class="box">${this._section("mdi:cash-plus", this.t("income"))}${incomePersons.map(
       (p, i) => `<div class="esub"><div class="block-head"><span class="dot" style="background:${PERSON_COLORS[p]}"></span>${esc(d.persons[p].trim() || this.t("person_n", { n: i + 1 }))}</div>
-        ${d.income.filter((r) => r.person === p).map((r) => `<div class="erow simple" data-id="${r._id}">${input("income", r, "name", this.t("name"))}${amount("income", r)}${remove("income", r)}</div>`).join("")}
+        ${d.income.some((r) => r.person === p) ? head("income", [["name", this.t("name")], ["amount", this.t("net_per_month")], ["gross", this.t("gross_optional")]]) : ""}
+        ${d.income
+          .filter((r) => r.person === p)
+          .map(
+            (r) =>
+              `<div class="erow income" data-id="${r._id}">${input("income", r, "name", this.t("name"))}${input("income", r, "amount", this.t("net_per_month"), 'inputmode="decimal" autocomplete="off"')}${input("income", r, "annual_gross", this.t("gross_optional"), 'inputmode="decimal" autocomplete="off"')}${remove("income", r)}</div>`
+          )
+          .join("")}
         ${add("income", this.t("add_income"), p)}</div>`
     ).join("")}</div>`;
 
-    const head = (cls, cols) => `<div class="erow ${cls} ehead">${cols.map(([f, label]) => `<span class="f-${f}">${esc(label)}</span>`).join("")}</div>`;
     const shared = `<div class="box">${this._section("mdi:account-group-outline", this.t("shared_income"))}
       ${d.shared_income.length && !single ? head("shared", [["name", this.t("name")], ["to", this.t("received_by")], ["amount", this.t("amount")]]) : ""}
       ${d.shared_income.map((r) => `<div class="erow ${single ? "simple" : "shared"}" data-id="${r._id}">${input("shared_income", r, "name", this.t("name"))}${single ? "" : personSelect("shared_income", r, "to", this.t("received_by"))}${amount("shared_income", r)}${remove("shared_income", r)}</div>`).join("")}
@@ -905,6 +940,12 @@ const STYLE = `
   .erow { display: grid; gap: 8px 10px; align-items: end; padding: 8px 0; border-top: 1px solid var(--divider-color); }
   .erow.persons { grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 0; }
   .erow.simple { grid-template-columns: minmax(0, 1fr) 110px 40px; }
+  .erow.income { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px; grid-template-areas: "name name remove" "amount gross gross"; }
+  .erow.income .f-name { grid-area: name; } .erow.income .f-amount { grid-area: amount; }
+  .erow.income .f-annual_gross, .erow.income .f-gross { grid-area: gross; } .erow.income .remove { grid-area: remove; }
+  .field.f-annual_gross input { text-align: right; font-variant-numeric: tabular-nums; }
+  /* narrow: both amounts of an income need visible labels (wide cards have column headers) */
+  .erow.income .f-amount .sr, .erow.income .f-annual_gross .sr { position: static; width: auto; height: auto; clip: auto; overflow: visible; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .ehead { display: none; }
   .erow.shared { grid-template-columns: minmax(0, 1fr) 110px 40px; grid-template-areas: "name name remove" "to amount amount"; }
@@ -953,6 +994,8 @@ const STYLE = `
     .erow.shared { grid-template-columns: minmax(0, 1fr) 160px 120px 40px; grid-template-areas: "name to amount remove"; }
     .erow.cost { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 140px 160px 120px 40px; grid-template-areas: "name category person freq amount remove"; }
     .erow.simple { grid-template-columns: minmax(0, 1fr) 140px 40px; }
+    .erow.income { grid-template-columns: minmax(0, 1fr) 140px 180px 40px; grid-template-areas: "name amount gross remove"; }
+    .erow.income .f-amount .sr, .erow.income .f-annual_gross .sr { position: absolute; width: 1px; height: 1px; clip: rect(0 0 0 0); overflow: hidden; }
     .ehead { display: grid; padding: 0 0 2px; border-top: 0; font-size: 12px; color: var(--secondary-text-color); }
     .ehead + .erow { border-top: 0; }
     .footer .hint { flex-basis: auto; }

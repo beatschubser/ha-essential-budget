@@ -24,7 +24,8 @@ jobs:
           python-version: "3.13"
       - run: python3 tests/test_logic.py
       - name: Check card syntax
-        run: node --check custom_components/essential_budget/frontend/essential-budget-card.js
+        # the files are ES modules: checked as .mjs
+        run: for f in custom_components/essential_budget/frontend/*.js; do cp "$f" /tmp/check.mjs && node --check /tmp/check.mjs || exit 1; done
       - name: Check version consistency
         run: |
           base=custom_components/essential_budget

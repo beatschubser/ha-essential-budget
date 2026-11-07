@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "custom_components" / "essential_budget"))
 
-from logic import BudgetError, default_data, monthly, totals, validate  # noqa: E402
+from logic import BudgetError, default_data, validate  # noqa: E402
 
 SAMPLE = {
     "persons": {"a": "  Alex ", "b": "Sam"},
@@ -23,7 +23,7 @@ SAMPLE = {
     "fixed_costs": [
         {"name": "Rent", "category": "Home", "person": "a", "amount": 1480, "interval_months": 1},
         {"name": "Liability", "category": "Insurance", "person": "b", "amount": 89, "interval_months": 12},
-        {"name": "Broadcasting fee", "category": "  Home ", "person": "b", "amount": 55.08, "payments_per_year": 4},  # 0.2.0 betas
+        {"name": "Broadcasting fee", "category": "  Home ", "person": "b", "amount": 55.08, "interval_months": 3},
         {"name": "Car tax", "category": "Car", "person": "a", "amount": 240, "interval_months": 24},
     ],
     "annual_gross": [{"name": "Gross Alex", "amount": 58000}],  # list of earlier versions: dropped
@@ -47,7 +47,7 @@ def test_validate_cleans() -> None:
         {"name": "Bonus", "person": "b", "gross": 800.0},
     ]
     assert data["colors"] == {"a": "#2f6fde"}
-    assert data["fixed_costs"][2]["interval_months"] == 3  # converted from payments_per_year
+    assert data["fixed_costs"][2]["interval_months"] == 3
     assert data["fixed_costs"][2]["category"] == "Home"
     assert "unknown" not in data and "annual_gross" not in data and "bonuses" not in data
     assert list(data["fixed_costs"][0]) == ["name", "category", "person", "amount", "interval_months"]
@@ -68,7 +68,6 @@ def test_defaults() -> None:
 def test_one_person() -> None:
     data = validate({"persons": {"a": "Alex", "b": " "}, "income": [{"name": "Salary", "person": "a", "amount": 100}]})
     assert data["persons"] == {"a": "Alex", "b": ""}
-    assert totals(data)["budget_per_person"] == {"a": 100}
     try:
         validate({"persons": {"a": "Alex"}, "fixed_costs": [{"name": "X", "person": "b", "amount": 1}]})
     except BudgetError as err:
@@ -83,7 +82,6 @@ def test_invalid() -> None:
         ({"income": [{"name": "", "person": "a", "amount": 5}]}, "income 1: name missing"),
         ({"fixed_costs": [{"name": "X", "person": "a", "amount": 1, "interval_months": 121}]}, "interval_months"),
         ({"fixed_costs": [{"name": "X", "person": "a", "amount": 1, "interval_months": 2.5}]}, "interval_months"),
-        ({"fixed_costs": [{"name": "X", "person": "a", "amount": 1, "payments_per_year": 13}]}, "payments_per_year"),
         ({"colors": {"a": "blue"}}, "colors: a"),
         ({"income": [{"name": "X", "person": "a", "amount": -1}]}, "income 1: amount"),
         ({"income": [{"name": "X", "person": "a", "amount": "12"}]}, "income 1: amount"),
@@ -101,19 +99,6 @@ def test_invalid() -> None:
             assert expected in str(err), (expected, str(err))
         else:
             raise AssertionError(f"accepted: {data}")
-
-
-def test_totals() -> None:
-    data = validate(SAMPLE)
-    assert monthly(data["fixed_costs"][1]) == 89 / 12
-    t = totals(data)
-    assert t["income"] == 3150 + 450 + 2480 + 518  # special payments are not monthly income
-    assert t["annual_gross_per_person"] == {"a": 12 * 4800 + 3400, "b": 800}
-    costs = 1480 + 89 / 12 + 55.08 / 3 + 240 / 24
-    assert abs(t["fixed_costs"] - costs) < 1e-9
-    assert abs(t["budget"] - (t["income"] - costs)) < 1e-9
-    assert t["budget_per_person"]["a"] == 3150 + 450 + 518 - 1480 - 10
-    assert abs(t["budget_per_person"]["b"] - (2480 - 89 / 12 - 55.08 / 3)) < 1e-9
 
 
 if __name__ == "__main__":

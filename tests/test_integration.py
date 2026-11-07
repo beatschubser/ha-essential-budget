@@ -82,7 +82,6 @@ async def test_file_created_and_saved(hass: HomeAssistant, hass_ws_client) -> No
     await client.send_json_auto_id({"type": f"{DOMAIN}/get"})
     result = (await client.receive_json())["result"]
     assert result["data"] == saved
-    assert result["file"] == DATA_FILE
 
     # invalid data is rejected and the file stays unchanged
     bad = {**BUDGET, "fixed_costs": [{"name": "X", "person": "a", "amount": 1, "interval_months": 0}]}
@@ -131,3 +130,12 @@ async def test_edit_page_registered(hass: HomeAssistant) -> None:
     assert panel.sidebar_title is None
     assert panel.config["_panel_custom"]["name"] == "essential-budget-panel"
     assert panel.config_panel_domain == DOMAIN
+
+
+async def test_frontend_files_served(hass: HomeAssistant, hass_client_no_auth) -> None:
+    """The card and its modules are served."""
+    await setup(hass)
+    client = await hass_client_no_auth()
+    for name in ("essential-budget-card.js", "texts.js", "styles.js"):
+        assert (await client.get(f"/essential_budget_files/{name}")).status == 200
+    assert (await client.get("/essential_budget_files/missing.js")).status == 404

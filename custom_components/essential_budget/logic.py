@@ -1,4 +1,4 @@
-"""Budget data: default content and validation. No Home Assistant imports (tested with tests/test_logic.py).
+"""Budget data: default content and validation (the card does the calculation). No Home Assistant imports (tested with tests/test_logic.py).
 
 File format (.storage/essential_budget.json), amounts in the currency of Home Assistant with cents:
 
@@ -18,7 +18,7 @@ File format (.storage/essential_budget.json), amounts in the currency of Home As
 - annual gross of a person = 12 × gross of the income + gross of the special payments
 - shared_income: income of both (e.g. child benefit); "to" = the person whose account receives it
 - fixed_costs: amount per payment, paid every "interval_months" months (1 = monthly, 3 = quarterly,
-  12 = yearly, up to 120); "person" pays it. Files of 0.2.0 betas have "payments_per_year" instead (converted).
+  12 = yearly, up to 120); "person" pays it.
 """
 
 from __future__ import annotations
@@ -124,12 +124,6 @@ def _item(list_key: str, raw: Any, index: int, persons: tuple[str, ...]) -> dict
         elif field == "category":
             item[field] = _text(value, f"{where}: category", MAX_CATEGORY)
         elif field == "interval_months":
-            if value is None and raw.get("payments_per_year") is not None:
-                # 0.2.0 betas stored payments per year (12 = monthly, 1 = yearly)
-                payments = raw["payments_per_year"]
-                if isinstance(payments, bool) or not isinstance(payments, (int, float)) or not 1 <= payments <= 12:
-                    raise BudgetError(f"{where}: payments_per_year: number from 1 to 12 expected")
-                value = round(12 / payments)
             item[field] = _interval(1 if value is None else value, f"{where}: interval_months")
     return item
 
@@ -176,30 +170,3 @@ def validate(data: Any) -> dict[str, Any]:
             raise BudgetError(f"{key}: more than {MAX_ITEMS} entries")
         result[key] = [item for i, raw in enumerate(raw_list) if (item := _item(key, raw, i, active)) is not None]
     return result
-
-
-def monthly(cost: dict[str, Any]) -> float:
-    """Monthly share of a fixed cost (yearly costs count with a twelfth)."""
-    return cost["amount"] / cost["interval_months"]
-
-
-def totals(data: dict[str, Any]) -> dict[str, Any]:
-    """Monthly sums as shown in the card (exact values, rounding happens only for display)."""
-    persons = active_persons(data)
-    income = {p: sum(i["amount"] for i in data["income"] if i["person"] == p) for p in persons}
-    shared = {p: sum(i["amount"] for i in data["shared_income"] if i["to"] == p) for p in persons}
-    costs = {p: sum(monthly(c) for c in data["fixed_costs"] if c["person"] == p) for p in persons}
-    income_total = sum(income.values()) + sum(shared.values())
-    costs_total = sum(costs.values())
-    annual_gross = {
-        p: sum(12 * i["gross"] for i in data["income"] if i["person"] == p and "gross" in i)
-        + sum(s["gross"] for s in data["special_payments"] if s["person"] == p and "gross" in s)
-        for p in persons
-    }
-    return {
-        "income": income_total,
-        "annual_gross_per_person": annual_gross,
-        "fixed_costs": costs_total,
-        "budget": income_total - costs_total,
-        "budget_per_person": {p: income[p] + shared[p] - costs[p] for p in persons},
-    }

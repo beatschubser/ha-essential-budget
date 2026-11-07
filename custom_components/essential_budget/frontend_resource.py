@@ -39,8 +39,8 @@ class FrontendView(HomeAssistantView):
 
 
 def _list_files() -> dict[str, Path]:
-    """Only these files are served (no directory access)."""
-    files = [FOLDER / "essential-budget-card.js"]
+    """Only the JavaScript files of the frontend folder are served (no directory access)."""
+    files = sorted(FOLDER.glob("*.js"))
     return {f.relative_to(FOLDER).as_posix(): f for f in files}
 
 

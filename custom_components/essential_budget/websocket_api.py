@@ -42,7 +42,7 @@ def ws_subscribe(hass: HomeAssistant, connection: websocket_api.ActiveConnection
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get"})
 @callback
 def ws_get(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
-    """The budget and the name of its file."""
+    """The budget."""
     store = hass.data.get(DATA_STORE)
     if store is None:
         connection.send_error(msg["id"], websocket_api.ERR_NOT_FOUND, "Essential Budget is not set up")
@@ -50,7 +50,7 @@ def ws_get(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg:
     if store.error is not None:
         connection.send_error(msg["id"], "invalid_file", f"{DATA_FILE}: {store.error}")
         return
-    connection.send_result(msg["id"], {"data": store.data, "file": DATA_FILE})
+    connection.send_result(msg["id"], {"data": store.data})
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/save", vol.Required("data"): dict})

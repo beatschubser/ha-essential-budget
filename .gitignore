@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local test artifacts
+*.zip
+
+# Local only: notes and README image sources
+CLAUDE.md
+assets/raw/
+assets/mockups/
+assets/icon-source.png
+scripts/render_mockups.py
+
+# Local test data
+essential_budget.json
+.pytest_cache/

@@ -8,7 +8,7 @@
  * Layout: one column on narrow cards, desktop layout from DESKTOP_WIDTH (container query).
  */
 
-const VERSION = "0.2.0-beta.2";
+const VERSION = "0.2.0-beta.3";
 const WS = "essential_budget";
 const PERSONS = ["a", "b"];
 const PERSON_COLORS = { a: "#2f6fde", b: "#d9822b", shared: "#7a8794" };
@@ -64,6 +64,11 @@ const TEXTS = {
     name_of_optional: "Name of person {n} (optional)",
     person_n: "Person {n}",
     net_per_month: "Net per month",
+    categories: "Categories",
+    new_category: "Category",
+    new_category_name: "New category",
+    rename_category: "Rename category",
+    move_to: "Move to category",
     gross_optional: "Annual gross (optional)",
     one_person_hint: "Leave the second name empty for a budget of one person.",
     second_person_in_use: "The second person still has income. Remove it or enter a name for the second person.",
@@ -128,6 +133,11 @@ const TEXTS = {
     name_of_optional: "Name Person {n} (optional)",
     person_n: "Person {n}",
     net_per_month: "Netto pro Monat",
+    categories: "Kategorien",
+    new_category: "Kategorie",
+    new_category_name: "Neue Kategorie",
+    rename_category: "Kategorie umbenennen",
+    move_to: "In andere Kategorie verschieben",
     gross_optional: "Jahresbrutto (optional)",
     one_person_hint: "Für das Budget einer einzelnen Person bleibt der zweite Name leer.",
     second_person_in_use: "Die zweite Person hat noch Einnahmen. Entferne sie oder trag einen Namen für die zweite Person ein.",
@@ -526,6 +536,30 @@ class EssentialBudgetCard extends HTMLElement {
       case "remove":
         this._draft[list] = this._draft[list].filter((r) => r._id !== id);
         break;
+      case "tab":
+        this._costTab = key;
+        this._renaming = false;
+        this._moving = null;
+        break;
+      case "newcat": {
+        // a new tab with one empty entry (empty entries are not saved)
+        const name = this._freshCategory();
+        this._addRow("fixed_costs");
+        this._draft.fixed_costs.find((r) => r._id === this._lastAdded).category = name;
+        this._costTab = name;
+        this._renaming = true;
+        this._render();
+        this._root.querySelector(".tab-rename")?.select();
+        return;
+      }
+      case "rename":
+        this._renaming = !this._renaming;
+        this._render();
+        this._root.querySelector(".tab-rename")?.select();
+        return;
+      case "move":
+        this._moving = this._moving === id ? null : id;
+        break;
       default:
         return;
     }
@@ -548,13 +582,35 @@ class EssentialBudgetCard extends HTMLElement {
       }));
     this._detail = null;
     this._saveError = null;
+    this._renaming = false;
+    this._moving = null;
+  }
+
+  /** Categories of the fixed costs in the edit mode (alphabetical, "" = without category). */
+  _costCategories() {
+    const names = new Set(this._draft.fixed_costs.map((r) => r.category.trim()));
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }
+
+  _activeCostTab(categories = this._costCategories()) {
+    if (!categories.includes(this._costTab)) this._costTab = categories[0] ?? "";
+    return this._costTab;
+  }
+
+  /** A new category name that does not exist yet ("New category", "New category 2", ...). */
+  _freshCategory() {
+    const base = this.t("new_category_name");
+    const taken = new Set(this._costCategories());
+    let name = base;
+    for (let i = 2; taken.has(name); i++) name = `${base} ${i}`;
+    return name;
   }
 
   _addRow(list, person) {
     const row = { _id: uid(), name: "", amount: "" };
     if (list === "income") row.person = person;
     if (list === "shared_income") row.to = "a";
-    if (list === "fixed_costs") Object.assign(row, { category: "", person: "a", payments_per_year: 12 });
+    if (list === "fixed_costs") Object.assign(row, { category: this._activeCostTab(), person: "a", payments_per_year: 12 });
     this._draft[list].push(row);
     this._lastAdded = row._id;
   }
@@ -569,6 +625,17 @@ class EssentialBudgetCard extends HTMLElement {
     const el = e.target;
     const { list, id, field } = el.dataset;
     if (!field) return;
+    if (list === "cat-rename") {
+      if (e.type !== "change") return;
+      // rename the active category for all its entries (an existing name merges both)
+      const from = this._costTab;
+      const to = el.value.replace(/\s+/g, " ").trim();
+      for (const r of this._draft.fixed_costs) if (r.category.trim() === from) r.category = to;
+      this._costTab = to;
+      this._renaming = false;
+      this._render();
+      return;
+    }
     if (list === "persons") {
       this._draft.persons[field] = el.value;
       // on leaving the field: show or hide the sections of the second person
@@ -585,6 +652,11 @@ class EssentialBudgetCard extends HTMLElement {
       el.setSelectionRange?.(caret - removedBefore, caret - removedBefore);
     }
     row[field] = field === "payments_per_year" ? Number(el.value) : el.value;
+    if (list === "fixed_costs" && field === "category" && e.type === "change") {
+      this._moving = null; // moved to another tab
+      this._render();
+      return;
+    }
     if (el.classList.contains("invalid")) this._markField(el);
   }
 
@@ -677,6 +749,10 @@ class EssentialBudgetCard extends HTMLElement {
     }
     this._root.lang = this._lang;
     this._root.innerHTML = update + body;
+    // keep the active category tab visible in a scrolled tab bar
+    const tabs = this._root.querySelector(".tabs");
+    const activeTab = tabs?.querySelector(".tab.active, .tab-rename");
+    if (activeTab) tabs.scrollLeft = Math.max(0, activeTab.offsetLeft - tabs.offsetLeft - 16);
   }
 
   _header() {
@@ -808,7 +884,10 @@ class EssentialBudgetCard extends HTMLElement {
     const simpleRows = (list) =>
       d[list].map((r) => `<div class="erow simple" data-id="${r._id}">${input(list, r, "name", this.t("name"))}${amount(list, r)}${remove(list, r)}</div>`).join("");
 
-    const categories = [...new Set(d.fixed_costs.map((c) => c.category.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    // Fixed costs are edited per category (tabs); a row belongs to the tab of its category
+    const categories = this._costCategories();
+    const tab = this._activeCostTab(categories);
+    const catLabel = (c) => c || this.t("no_category");
 
     const active = activePersons(d.persons);
     const single = active.length === 1;
@@ -840,12 +919,28 @@ class EssentialBudgetCard extends HTMLElement {
       ${d.shared_income.map((r) => `<div class="erow ${single ? "simple" : "shared flow"}" data-id="${r._id}">${input("shared_income", r, "name", this.t("name"))}${single ? "" : personSelect("shared_income", r, "to", this.t("received_by"))}${amount("shared_income", r)}${remove("shared_income", r)}</div>`).join("")}
       ${add("shared_income", this.t("add_shared"))}</div>`;
 
+    const tabs = `<div class="tabs" role="tablist" aria-label="${esc(this.t("categories"))}">${categories
+      .map((c) =>
+        c === tab && this._renaming
+          ? `<input class="tab-rename" type="text" data-list="cat-rename" data-field="name" value="${esc(c)}" placeholder="${esc(this.t("category"))}" aria-label="${esc(this.t("rename_category"))}">`
+          : `<button class="tab ${c === tab ? "active" : ""}" role="tab" aria-selected="${c === tab}" data-action="tab" data-key="${esc(c)}">${esc(catLabel(c))}</button>`
+      )
+      .join("")}
+      ${categories.length ? `<button class="icon-btn small-btn" data-action="rename" title="${esc(this.t("rename_category"))}" aria-label="${esc(this.t("rename_category"))}"><ha-icon icon="mdi:pencil"></ha-icon></button>` : ""}
+      <button class="tab new" data-action="newcat"><ha-icon icon="mdi:plus"></ha-icon>${esc(this.t("new_category"))}</button></div>`;
+    const moveSelect = (r) =>
+      `<label class="field f-move"><span class="sr">${esc(this.t("move_to"))}</span><select data-list="fixed_costs" data-id="${r._id}" data-field="category">${categories
+        .map((c) => `<option value="${esc(c)}" ${c === r.category.trim() ? "selected" : ""}>${esc(catLabel(c))}</option>`)
+        .join("")}</select></label>`;
+    const moveButton = (r) =>
+      `<button class="icon-btn remove move" data-action="move" data-id="${r._id}" title="${esc(this.t("move_to"))}" aria-label="${esc(this.t("move_to"))}"><ha-icon icon="mdi:folder-move-outline"></ha-icon></button>`;
+    const tabRows = d.fixed_costs.filter((r) => r.category.trim() === tab);
     const costs = `<div class="box">${this._section("mdi:receipt-text-outline", this.t("fixed_costs"))}
-      ${d.fixed_costs.length ? head(`cost ${single ? "single" : ""}`, [["name", this.t("name")], ["category", this.t("category")], ...(single ? [] : [["person", this.t("paid_by")]]), ["freq", this.t("frequency")], ["amount", this.t("amount")]]) : ""}
-      <datalist id="eb-categories">${categories.map((c) => `<option value="${esc(c)}"></option>`).join("")}</datalist>
-      ${d.fixed_costs
+      ${tabs}
+      ${tabRows.length ? head(`tabrow ${single ? "single" : ""}`, [["name", this.t("name")], ["amount", this.t("amount")], ["freq", this.t("frequency")], ...(single ? [] : [["person", this.t("paid_by")]])]) : ""}
+      ${tabRows
         .map(
-          (r) => `<div class="erow cost flow ${single ? "single" : ""}" data-id="${r._id}">${input("fixed_costs", r, "name", this.t("name"))}${input("fixed_costs", r, "category", this.t("category"), 'list="eb-categories"')}${single ? "" : personSelect("fixed_costs", r, "person", this.t("paid_by"))}${freqSelect(r)}${amount("fixed_costs", r)}${remove("fixed_costs", r)}</div>`
+          (r) => `<div class="erow tabrow flow ${single ? "single" : ""}" data-id="${r._id}">${input("fixed_costs", r, "name", this.t("name"))}${amount("fixed_costs", r)}${freqSelect(r)}${single ? "" : personSelect("fixed_costs", r, "person", this.t("paid_by"))}${this._moving === r._id ? moveSelect(r) : ""}${moveButton(r)}${remove("fixed_costs", r)}</div>`
         )
         .join("")}
       ${add("fixed_costs", this.t("add_cost"))}</div>`;
@@ -1046,6 +1141,19 @@ const STYLE = `
   .field input.invalid { background: color-mix(in srgb, var(--error-color, #db4437) 18%, transparent); border-color: var(--error-color, #db4437); }
   .remove { width: 40px; height: 40px; }
   .toggle-space { width: 44px; flex-shrink: 0; }
+  .tabs { display: flex; gap: 8px; align-items: center; overflow-x: auto; padding: 2px 2px 12px; scrollbar-width: thin; }
+  .tab { flex-shrink: 0; height: 36px; padding: 0 14px; border-radius: 18px; cursor: pointer; white-space: nowrap;
+    border: 1px solid var(--divider-color); background: transparent; font-size: 14px; font-weight: 500; }
+  .tab.active { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
+  .tab.new { display: inline-flex; align-items: center; gap: 4px; border-style: dashed; color: var(--primary-color); padding-left: 8px; }
+  .tab.new ha-icon { --mdc-icon-size: 18px; }
+  .tab-rename { flex-shrink: 0; width: 180px; height: 36px; box-sizing: border-box; padding: 0 12px; border-radius: 18px; font: inherit; font-size: 14px;
+    border: 2px solid var(--primary-color); background: var(--ha-card-background, var(--card-background-color)); color: var(--primary-text-color); }
+  .small-btn { width: 36px; height: 36px; }
+  .small-btn ha-icon { --mdc-icon-size: 18px; }
+  .erow.tabrow { padding: 14px 0; }
+  .erow.tabrow.flow .field.f-move { flex-basis: 100%; order: 6; }
+  .erow.tabrow.flow .f-name { flex-basis: calc(100% - 100px); }
   .money { display: flex; align-items: center; height: 40px; box-sizing: border-box; border-radius: 8px;
     border: 1px solid var(--divider-color); background: var(--ha-card-background, var(--card-background-color)); }
   .money:focus-within { outline: 2px solid var(--primary-color); outline-offset: -1px; }
@@ -1097,6 +1205,12 @@ const STYLE = `
     .erow.cost { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 140px 160px 120px 40px; grid-template-areas: "name category person freq amount remove"; }
     .erow.simple { grid-template-columns: minmax(0, 1fr) 140px 40px; }
     .erow.flow { display: grid; }
+    .erow.tabrow { grid-template-columns: minmax(0, 1fr) 130px 160px 140px 40px 40px; grid-template-areas: "name amount freq person move remove" "target target target target target target"; }
+    .erow.tabrow.single { grid-template-columns: minmax(0, 1fr) 130px 160px 40px 40px; grid-template-areas: "name amount freq move remove" "target target target target target"; }
+    .erow.tabrow .f-name { grid-area: name; } .erow.tabrow .f-amount { grid-area: amount; } .erow.tabrow .f-freq { grid-area: freq; }
+    .erow.tabrow .f-person { grid-area: person; } .erow.tabrow .move { grid-area: move; } .erow.tabrow .remove:not(.move) { grid-area: remove; }
+    .erow.tabrow .f-move { grid-area: target; max-width: 320px; }
+    .ehead.tabrow { padding-bottom: 0; }
     .erow.income { grid-template-columns: minmax(0, 1fr) 140px 180px 40px; grid-template-areas: "name amount gross remove"; }
     .erow.income .f-amount .sr, .erow.income .f-annual_gross .sr { position: absolute; width: 1px; height: 1px; clip: rect(0 0 0 0); overflow: hidden; }
     .ehead { display: grid; padding: 0 0 2px; border-top: 0; font-size: 12px; color: var(--secondary-text-color); }

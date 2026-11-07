@@ -8,7 +8,7 @@
  * Layout: one column on narrow cards, desktop layout from DESKTOP_WIDTH (container query).
  */
 
-const VERSION = "0.1.0-beta.2";
+const VERSION = "0.1.0-beta.3";
 const WS = "essential_budget";
 const PERSONS = ["a", "b"];
 const PERSON_COLORS = { a: "#2f6fde", b: "#d9822b", shared: "#7a8794" };
@@ -752,7 +752,9 @@ class EssentialBudgetCard extends HTMLElement {
       <button class="btn primary" data-action="save" ${this._saving ? "disabled" : ""}>${esc(this.t(this._saving ? "saving" : "save"))}</button>
     </div>`;
 
-    return `<div class="header"><h1 class="title">${esc(this.t("edit_title"))}</h1></div>${persons}${income}${shared}${costs}${gross}${bonuses}${footer}`;
+    // With one person shared income is just income: the section only stays while it still has entries
+    const showShared = !single || d.shared_income.length > 0;
+    return `<div class="header"><h1 class="title">${esc(this.t("edit_title"))}</h1></div>${persons}${income}${showShared ? shared : ""}${costs}${gross}${bonuses}${footer}`;
   }
 }
 

@@ -8,7 +8,7 @@
  * Layout: one column on narrow cards, desktop layout from DESKTOP_WIDTH (container query).
  */
 
-const VERSION = "0.1.0-beta.3";
+const VERSION = "0.1.0-beta.4";
 const WS = "essential_budget";
 const PERSONS = ["a", "b"];
 const PERSON_COLORS = { a: "#2f6fde", b: "#d9822b", shared: "#7a8794" };
@@ -775,7 +775,8 @@ class EssentialBudgetCardEditor extends HTMLElement {
   }
 
   _render() {
-    if (!this._hass) return;
+    // Home Assistant may set hass before the config: wait for both
+    if (!this._hass || !this._config) return;
     if (!this._form) {
       this._form = document.createElement("ha-form");
       this._form.computeLabel = () => (pickLanguage(this._hass) === "de" ? "Titel (optional)" : "Title (optional)");

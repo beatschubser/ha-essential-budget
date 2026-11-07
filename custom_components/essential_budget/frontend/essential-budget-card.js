@@ -2,9 +2,10 @@
  *
  * - EssentialBudgetCard shows the budget. In the preview of the dashboard card editor it opens in
  *   edit mode; the budget is then saved with its own button to /config/essential_budget.json.
- * - EssentialBudgetCardEditor is the visual card editor (title and currency; grid options are kept).
+ * - EssentialBudgetCardEditor is the visual card editor (only the title; grid options are kept).
  *
- * All amounts are stored with cents and shown rounded to whole currency units.
+ * All amounts are stored with cents and shown rounded to whole units of the currency set in
+ * Home Assistant (Settings > System > General).
  * Layout: one column on narrow cards, desktop layout from DESKTOP_WIDTH (container query).
  */
 
@@ -17,8 +18,7 @@ const PALETTE = ["#2f6fde", "#7c5cd6", "#d9822b", "#1f8f74", "#b0436e", "#0e7c99
 const FREQUENCIES = [12, 6, 4, 3, 2, 1]; // offered first in the edit mode; any value from 1 to 12 is valid
 const LISTS = ["income", "shared_income", "fixed_costs"];
 const AMOUNT_FIELDS = ["amount", "annual_gross"]; // text fields in the edit mode that hold amounts
-const DEFAULT_CURRENCY = "EUR";
-const CURRENCIES = ["EUR", "CHF", "USD", "GBP", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF"];
+const FALLBACK_CURRENCY = "EUR"; // if Home Assistant has no currency set
 const SAVED_NOTE_MS = 4000; // how long "Saved" is shown in the edit mode
 
 /* ---------------------------------------------------------------------
@@ -84,7 +84,6 @@ const TEXTS = {
     save: "Save budget",
     saved: "Saved",
     editor_hint: "Save the budget with the button below. The save button of this dialog only saves the card options.",
-    currency: "Currency",
     title_optional: "Title (optional)",
     saving: "Saving …",
     invalid: "Please check the marked fields.",
@@ -149,7 +148,6 @@ const TEXTS = {
     save: "Budget speichern",
     saved: "Gespeichert",
     editor_hint: "Das Budget speicherst du mit dem Button unten. Der Speichern-Button dieses Dialogs speichert nur die Kartenoptionen.",
-    currency: "Währung",
     title_optional: "Titel (optional)",
     saving: "Speichert …",
     invalid: "Bitte die markierten Felder prüfen.",
@@ -426,7 +424,7 @@ class EssentialBudgetCard extends HTMLElement {
   }
 
   get _currencyCode() {
-    return String(this._config.currency || DEFAULT_CURRENCY).trim().toUpperCase();
+    return String(this._hass?.config?.currency || FALLBACK_CURRENCY).trim().toUpperCase();
   }
 
   /** Symbol shown next to amount fields, e.g. "€" (the code if the browser does not know it). */
@@ -990,7 +988,7 @@ class EssentialBudgetCard extends HTMLElement {
 }
 
 /* =====================================================================
- * Card editor (title and currency; all other keys like grid_options are kept)
+ * Card editor (only the title; all other keys like grid_options are kept)
  * ===================================================================== */
 
 class EssentialBudgetCardEditor extends HTMLElement {
@@ -1011,13 +1009,11 @@ class EssentialBudgetCardEditor extends HTMLElement {
     if (!this._form) {
       this._form = document.createElement("ha-form");
       const texts = TEXTS[pickLanguage(this._hass)];
-      this._form.computeLabel = (field) => (field.name === "currency" ? texts.currency : texts.title_optional);
+      this._form.computeLabel = () => texts.title_optional;
       this._form.addEventListener("value-changed", (e) => {
         const config = { ...this._config, ...e.detail.value };
         if (!config.title) delete config.title;
-        // only a currency other than the default is stored
-        if (config.currency) config.currency = String(config.currency).trim().toUpperCase();
-        if (!config.currency || config.currency === DEFAULT_CURRENCY) delete config.currency;
+        delete config.currency; // option of 0.2.0 betas, the currency now comes from Home Assistant
         this._config = config;
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
       });
@@ -1026,9 +1022,8 @@ class EssentialBudgetCardEditor extends HTMLElement {
     this._form.hass = this._hass;
     this._form.schema = [
       { name: "title", selector: { text: {} } },
-      { name: "currency", selector: { select: { mode: "dropdown", custom_value: true, options: CURRENCIES } } },
     ];
-    this._form.data = { title: this._config.title || "", currency: this._config.currency || DEFAULT_CURRENCY };
+    this._form.data = { title: this._config.title || "" };
   }
 }
 

@@ -65,7 +65,6 @@ const TEXTS = {
     new_category: "Category",
     new_category_name: "New category",
     rename_category: "Rename category",
-    move_to: "Move to category",
     gross_optional: "Annual gross (optional)",
     one_person_hint: "Leave the name empty for a budget of one person.",
     second_person_in_use: "The second person still has entries. Remove them or enter a name for the second person.",
@@ -131,7 +130,6 @@ const TEXTS = {
     new_category: "Kategorie",
     new_category_name: "Neue Kategorie",
     rename_category: "Kategorie umbenennen",
-    move_to: "In andere Kategorie verschieben",
     gross_optional: "Jahresbrutto (optional)",
     one_person_hint: "Für das Budget einer einzelnen Person bleibt der Name leer.",
     second_person_in_use: "Die zweite Person hat noch Einträge. Entferne sie oder trag einen Namen für die zweite Person ein.",
@@ -538,12 +536,10 @@ class EssentialBudgetCard extends HTMLElement {
       case "edittab":
         this._editTab = key;
         this._renaming = false;
-        this._moving = null;
         break;
       case "tab":
         this._costTab = key;
         this._renaming = false;
-        this._moving = null;
         break;
       case "newcat": {
         // a new tab with one empty entry (empty entries are not saved)
@@ -561,9 +557,6 @@ class EssentialBudgetCard extends HTMLElement {
         this._render();
         this._root.querySelector(".tab-rename")?.select();
         return;
-      case "move":
-        this._moving = this._moving === id ? null : id;
-        break;
       default:
         return;
     }
@@ -587,7 +580,6 @@ class EssentialBudgetCard extends HTMLElement {
     this._detail = null;
     this._saveError = null;
     this._renaming = false;
-    this._moving = null;
     this._addingPerson = false;
   }
 
@@ -659,11 +651,6 @@ class EssentialBudgetCard extends HTMLElement {
     row[field] = field === "payments_per_year" ? Number(el.value) : el.value;
     if (list === "shared_income" && field === "to" && e.type === "change") {
       this._render(); // moved to the other person's tab
-      return;
-    }
-    if (list === "fixed_costs" && field === "category" && e.type === "change") {
-      this._moving = null; // moved to another tab
-      this._render();
       return;
     }
     if (el.classList.contains("invalid")) this._markField(el);
@@ -968,19 +955,13 @@ class EssentialBudgetCard extends HTMLElement {
       .join("")}
       ${categories.length ? `<button class="icon-btn small-btn" data-action="rename" title="${esc(this.t("rename_category"))}" aria-label="${esc(this.t("rename_category"))}"><ha-icon icon="mdi:pencil"></ha-icon></button>` : ""}
       <button class="tab new" data-action="newcat"><ha-icon icon="mdi:plus"></ha-icon>${esc(this.t("new_category"))}</button></div>`;
-    const moveSelect = (r) =>
-      `<label class="field f-move"><span class="sr">${esc(this.t("move_to"))}</span><select data-list="fixed_costs" data-id="${r._id}" data-field="category">${categories
-        .map((c) => `<option value="${esc(c)}" ${c === r.category.trim() ? "selected" : ""}>${esc(catLabel(c))}</option>`)
-        .join("")}</select></label>`;
-    const moveButton = (r) =>
-      `<button class="icon-btn remove move" data-action="move" data-id="${r._id}" title="${esc(this.t("move_to"))}" aria-label="${esc(this.t("move_to"))}"><ha-icon icon="mdi:folder-move-outline"></ha-icon></button>`;
     const tabRows = d.fixed_costs.filter((r) => r.category.trim() === tab);
     const costs = `<div class="box">${this._section("mdi:receipt-text-outline", this.t("fixed_costs"))}
       ${tabs}
       ${tabRows.length ? head(`tabrow ${single ? "single" : ""}`, [["name", this.t("name")], ["amount", this.t("amount")], ["freq", this.t("frequency")], ...(single ? [] : [["person", this.t("paid_by")]])]) : ""}
       ${tabRows
         .map(
-          (r) => `<div class="erow tabrow flow ${single ? "single" : ""}" data-id="${r._id}">${input("fixed_costs", r, "name", this.t("name"))}${amount("fixed_costs", r)}${freqSelect(r)}${single ? "" : personSelect("fixed_costs", r, "person", this.t("paid_by"))}${this._moving === r._id ? moveSelect(r) : ""}${moveButton(r)}${remove("fixed_costs", r)}</div>`
+          (r) => `<div class="erow tabrow flow ${single ? "single" : ""}" data-id="${r._id}">${input("fixed_costs", r, "name", this.t("name"))}${amount("fixed_costs", r)}${freqSelect(r)}${remove("fixed_costs", r)}${single ? "" : personSelect("fixed_costs", r, "person", this.t("paid_by"))}</div>`
         )
         .join("")}
       ${add("fixed_costs", this.t("add_cost"))}</div>`;
@@ -1110,7 +1091,6 @@ const STYLE = `
   .table.single .d-person { display: none; }
   .table.single .drow { grid-template-areas: "name month" "paid year"; }
   .table.single .dsum { grid-template-areas: "name month" ". year"; }
-  .erow.cost.single { grid-template-areas: "name name remove" "category amount amount" "freq freq freq"; }
 
   .blocks { display: flex; flex-direction: column; gap: 10px; }
   .block { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 10px;
@@ -1174,10 +1154,6 @@ const STYLE = `
   .erow.shared { grid-template-columns: minmax(0, 1fr) 110px 40px; grid-template-areas: "name name remove" "to amount amount"; }
   .erow.shared .f-name { grid-area: name; } .erow.shared .f-to { grid-area: to; }
   .erow.shared .f-amount { grid-area: amount; } .erow.shared .remove { grid-area: remove; }
-  .erow.cost { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px;
-    grid-template-areas: "name name remove" "category amount amount" "person freq freq"; }
-  .erow.cost .f-name { grid-area: name; } .erow.cost .f-category { grid-area: category; } .erow.cost .f-person { grid-area: person; }
-  .erow.cost .f-freq { grid-area: freq; } .erow.cost .f-amount { grid-area: amount; } .erow.cost .remove { grid-area: remove; }
   .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; color: var(--secondary-text-color); }
   .field input, .field select { font: inherit; font-size: 14px; color: var(--primary-text-color); height: 40px; box-sizing: border-box; min-width: 0;
     padding: 0 10px; border-radius: 8px; border: 1px solid var(--divider-color); background: var(--ha-card-background, var(--card-background-color)); }
@@ -1206,8 +1182,13 @@ const STYLE = `
   .small-btn { width: 36px; height: 36px; }
   .small-btn ha-icon { --mdc-icon-size: 18px; }
   .erow.tabrow { padding: 14px 0; }
-  .erow.tabrow.flow .field.f-move { flex-basis: 100%; order: 6; }
-  .erow.tabrow.flow .f-name { flex-basis: calc(100% - 100px); }
+  /* fixed costs on narrow cards: name, amount, frequency and delete in one line if it fits; the person below */
+  .erow.tabrow.flow { gap: 8px 6px; }
+  .erow.tabrow.flow .field.f-name { flex: 1 1 60px; order: 0; }
+  .erow.tabrow.flow .field.f-amount { flex: 0 1 88px; order: 1; }
+  .erow.tabrow.flow .field.f-freq { flex: 0 1 104px; order: 2; }
+  .erow.tabrow.flow .remove { order: 3; width: 32px; }
+  .erow.tabrow.flow .field.f-person { flex: 1 1 100%; order: 4; }
   .money { display: flex; align-items: center; height: 40px; box-sizing: border-box; border-radius: 8px;
     border: 1px solid var(--divider-color); background: var(--ha-card-background, var(--card-background-color)); }
   .money:focus-within { outline: 2px solid var(--primary-color); outline-offset: -1px; }
@@ -1221,7 +1202,6 @@ const STYLE = `
   .erow.flow .f-name { flex: 1 1 calc(100% - 50px); order: 0; }
   .erow.flow .remove { order: 1; }
   .erow.flow .field:not(.f-name) { order: 5; flex: 1 1 92px; min-width: 0; }
-  .erow.flow .field.f-category { order: 2; flex: 1 1 90px; }
   .erow.flow .field.f-amount { order: 3; }
   .erow.flow .field.f-freq { order: 4; flex: 1 1 104px; }
   .saved { display: inline-flex; align-items: center; gap: 6px; color: var(--success-color, #43a047); font-weight: 500; }
@@ -1251,18 +1231,15 @@ const STYLE = `
     .dhead > span { font-size: 11px; color: var(--secondary-text-color); }
     .dsum { grid-template-areas: "name person freq paid month year"; }
     .table.single .drow, .table.single .dsum { grid-template-columns: minmax(0, 1fr) 130px 120px 100px 100px; grid-template-areas: "name freq paid month year"; }
-    .erow.cost.single { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 160px 120px 40px; grid-template-areas: "name category freq amount remove"; }
     .narrow-only { display: none; }
     .wide-only { display: inline; }
     .erow.shared { grid-template-columns: minmax(0, 1fr) 160px 120px 40px; grid-template-areas: "name to amount remove"; }
-    .erow.cost { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 140px 160px 120px 40px; grid-template-areas: "name category person freq amount remove"; }
     .erow.simple { grid-template-columns: minmax(0, 1fr) 140px 40px; }
     .erow.flow { display: grid; }
-    .erow.tabrow { grid-template-columns: minmax(0, 1fr) 130px 160px 140px 40px 40px; grid-template-areas: "name amount freq person move remove" "target target target target target target"; }
-    .erow.tabrow.single { grid-template-columns: minmax(0, 1fr) 130px 160px 40px 40px; grid-template-areas: "name amount freq move remove" "target target target target target"; }
+    .erow.tabrow { grid-template-columns: minmax(0, 1fr) 130px 160px 140px 40px; grid-template-areas: "name amount freq person remove"; }
+    .erow.tabrow.single { grid-template-columns: minmax(0, 1fr) 130px 160px 40px; grid-template-areas: "name amount freq remove"; }
     .erow.tabrow .f-name { grid-area: name; } .erow.tabrow .f-amount { grid-area: amount; } .erow.tabrow .f-freq { grid-area: freq; }
-    .erow.tabrow .f-person { grid-area: person; } .erow.tabrow .move { grid-area: move; } .erow.tabrow .remove:not(.move) { grid-area: remove; }
-    .erow.tabrow .f-move { grid-area: target; max-width: 320px; }
+    .erow.tabrow .f-person { grid-area: person; } .erow.tabrow .remove { grid-area: remove; width: 40px; }
     .ehead.tabrow { padding-bottom: 0; }
     .erow.income { grid-template-columns: minmax(0, 1fr) 140px 180px 40px; grid-template-areas: "name amount gross remove"; }
     .erow.income .f-amount .sr, .erow.income .f-annual_gross .sr { position: absolute; width: 1px; height: 1px; clip: rect(0 0 0 0); overflow: hidden; }

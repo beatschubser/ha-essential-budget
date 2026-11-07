@@ -21,8 +21,8 @@ SAMPLE = {
         {"name": "Liability", "category": "Insurance", "person": "b", "amount": 89, "payments_per_year": 1},
         {"name": "Broadcasting fee", "category": "  Home ", "person": "b", "amount": 55.08, "payments_per_year": 4},
     ],
-    "annual_gross": [{"name": "Gross Alex", "amount": 58000}],
-    "bonuses": [{"name": "Bonus", "amount": 3200}],
+    "annual_gross": [{"name": "Gross Alex", "amount": 58000}],  # list of earlier versions: dropped
+    "bonuses": [{"name": "Bonus", "amount": 3200}],  # list of earlier versions: dropped
     "unknown": "dropped",
 }
 
@@ -37,7 +37,7 @@ def test_validate_cleans() -> None:
     assert "annual_gross" not in data["income"][1]  # optional, not written when empty
     assert "annual_gross" not in validate({"income": [{"name": "X", "person": "a", "amount": 1, "annual_gross": ""}]})["income"][0]
     assert data["fixed_costs"][2]["category"] == "Home"
-    assert "unknown" not in data
+    assert "unknown" not in data and "annual_gross" not in data and "bonuses" not in data
     assert list(data["fixed_costs"][0]) == ["name", "category", "person", "amount", "payments_per_year"]
     assert validate(data) == data  # stable
 
@@ -70,11 +70,11 @@ def test_invalid() -> None:
         ({"income": [{"name": "", "person": "a", "amount": 5}]}, "income 1: name missing"),
         ({"fixed_costs": [{"name": "X", "person": "a", "amount": 1, "payments_per_year": 13}]}, "payments_per_year"),
         ({"fixed_costs": [{"name": "X", "person": "a", "amount": 1, "payments_per_year": 2.5}]}, "payments_per_year"),
-        ({"bonuses": [{"name": "X", "amount": -1}]}, "bonuses 1: amount"),
-        ({"bonuses": [{"name": "X", "amount": "12"}]}, "bonuses 1: amount"),
-        ({"bonuses": [{"name": "X", "amount": True}]}, "bonuses 1: amount"),
+        ({"income": [{"name": "X", "person": "a", "amount": -1}]}, "income 1: amount"),
+        ({"income": [{"name": "X", "person": "a", "amount": "12"}]}, "income 1: amount"),
+        ({"income": [{"name": "X", "person": "a", "amount": True}]}, "income 1: amount"),
         ({"shared_income": [{"name": "X", "amount": 1}]}, "shared_income 1: to"),
-        ({"bonuses": {}}, "bonuses: list"),
+        ({"income": {}}, "income: list"),
         ({"income": [{"name": "X", "person": "a", "amount": 1, "annual_gross": -5}]}, "income 1: annual_gross"),
         ([], "object expected"),
     ]

@@ -12,7 +12,7 @@ A static household budget for Home Assistant, for one or two persons: monthly ne
 - **Fixed costs:** free categories, paid by one of the persons, paid 1 to 12 times a year. All costs are converted to a monthly value (a yearly payment counts with one twelfth)
 - **Categories** sorted by size with share and bar; expand a category to see its items, or open it for all details (amount per payment, per month, per year)
 - **Budget per person** (with two persons): own income + shared income received by the person − fixed costs paid by the person; negative values are shown in red
-- **Annual gross:** the annual gross entered with the income items plus free yearly values, with total; **bonuses (net)** as free yearly values
+- **Annual gross:** entered with the income items (optional), listed with the person and a total
 - **Editing in the card editor:** open the card in the dashboard editor and the preview shows the budget in edit mode (saved with its own button; administrators only)
 - Desktop layout on wide cards, one column on phones; follows the colors of your theme
 - English and German; amounts stored with cents and shown in whole units, currency selectable per card (default EUR)
@@ -46,14 +46,12 @@ Everything is stored in **`.storage/essential_budget.json`** in your Home Assist
   "fixed_costs": [
     { "name": "Rent", "category": "Home", "person": "a", "amount": 1480.0, "payments_per_year": 12 },
     { "name": "Liability insurance", "category": "Insurance", "person": "b", "amount": 89.0, "payments_per_year": 1 }
-  ],
-  "annual_gross": [{ "name": "Capital gains", "amount": 600.0 }],
-  "bonuses": [{ "name": "Annual bonus", "amount": 3200.0 }]
+  ]
 }
 ```
 
 - `amount` of a fixed cost is the amount **per payment**; `payments_per_year` is 1 (yearly) to 12 (monthly)
-- `annual_gross` of an income item is optional and appears with the annual gross values
+- `annual_gross` of an income item is optional and appears in the annual gross box
 - `"b": ""` means a budget of one person; then every entry belongs to person `a`
 - You can edit the file by hand (best while Home Assistant is stopped); the changes are read when Home Assistant starts. If the file cannot be read, the card shows an error, a repair notice appears and saving is blocked until the file is fixed, so it is never overwritten by accident
 - The file is part of every Home Assistant backup. Removing the integration keeps the file

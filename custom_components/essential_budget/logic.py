@@ -7,15 +7,12 @@ File format (.storage/essential_budget.json), amounts in the currency of Home As
   "persons": {"a": "Alex", "b": "Sam"},   (an empty name for "b" = budget of one person)
   "income": [{"name": "Salary", "person": "a", "amount": 3150.0, "annual_gross": 58000.0}],
   "shared_income": [{"name": "Child benefit", "to": "a", "amount": 518.0}],
-  "fixed_costs": [{"name": "Rent", "category": "Home", "person": "a", "amount": 1480.0, "payments_per_year": 12}],
-  "annual_gross": [{"name": "Gross salary Alex", "amount": 58000.0}],
-  "bonuses": [{"name": "Annual bonus", "amount": 3200.0}]
+  "fixed_costs": [{"name": "Rent", "category": "Home", "person": "a", "amount": 1480.0, "payments_per_year": 12}]
 }
 
-- income: net income per month of one person; "annual_gross" is optional and shown with the annual gross values
+- income: net income per month of one person; "annual_gross" (optional) is the yearly gross of this income
 - shared_income: income of both (e.g. child benefit); "to" = the person whose account receives it
 - fixed_costs: amount per payment, paid "payments_per_year" times a year (1 to 12); "person" pays it
-- annual_gross, bonuses: free yearly values (bonuses are net and part of the annual gross)
 """
 
 from __future__ import annotations
@@ -38,8 +35,6 @@ LISTS = {
     "income": ("name", "person", "amount", "annual_gross"),
     "shared_income": ("name", "to", "amount"),
     "fixed_costs": ("name", "category", "person", "amount", "payments_per_year"),
-    "annual_gross": ("name", "amount"),
-    "bonuses": ("name", "amount"),
 }
 
 

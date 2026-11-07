@@ -20,8 +20,6 @@ BUDGET = {
     "income": [{"name": "Salary", "person": "a", "amount": 3150}],
     "shared_income": [{"name": "Child benefit", "to": "b", "amount": 255}],
     "fixed_costs": [{"name": "Rent", "category": "Home", "person": "a", "amount": 1480, "payments_per_year": 12}],
-    "annual_gross": [],
-    "bonuses": [],
 }
 
 

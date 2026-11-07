@@ -15,7 +15,7 @@ const PERSON_COLORS = { a: "#2f6fde", b: "#d9822b", shared: "#7a8794" };
 // Category colors, assigned in alphabetical order of the category names
 const PALETTE = ["#2f6fde", "#7c5cd6", "#d9822b", "#1f8f74", "#b0436e", "#0e7c99", "#8a6d1f", "#a23b3b", "#4b8b2f", "#5f6b78"];
 const FREQUENCIES = [12, 6, 4, 3, 2, 1]; // offered first in the edit mode; any value from 1 to 12 is valid
-const LISTS = ["income", "shared_income", "fixed_costs", "annual_gross", "bonuses"];
+const LISTS = ["income", "shared_income", "fixed_costs"];
 const AMOUNT_FIELDS = ["amount", "annual_gross"]; // text fields in the edit mode that hold amounts
 const DEFAULT_CURRENCY = "EUR";
 const CURRENCIES = ["EUR", "CHF", "USD", "GBP", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF"];
@@ -32,8 +32,6 @@ const TEXTS = {
     budget: "Budget",
     budget_per_person: "Budget per person",
     annual_gross: "Annual gross",
-    bonuses: "Bonuses (net)",
-    bonuses_hint: "Part of the annual gross",
     per_month: "per month",
     per_year: "per year",
     after_costs: "after fixed costs, per month",
@@ -60,8 +58,7 @@ const TEXTS = {
     freq: { 12: "monthly", 6: "every two months", 4: "quarterly", 3: "every four months", 2: "half-yearly", 1: "yearly", n: "{n}× a year" },
     edit_title: "Edit budget",
     persons: "Persons",
-    name_of: "Name of person {n}",
-    name_of_optional: "Name of person {n} (optional)",
+    person_name: "Name",
     person_n: "Person {n}",
     net_per_month: "Net per month",
     categories: "Categories",
@@ -70,8 +67,10 @@ const TEXTS = {
     rename_category: "Rename category",
     move_to: "Move to category",
     gross_optional: "Annual gross (optional)",
-    one_person_hint: "Leave the second name empty for a budget of one person.",
-    second_person_in_use: "The second person still has income. Remove it or enter a name for the second person.",
+    one_person_hint: "Leave the name empty for a budget of one person.",
+    second_person_in_use: "The second person still has entries. Remove them or enter a name for the second person.",
+    name_optional: "Name (optional)",
+    shared_hint: "Received on the account of {name}",
     shared_income: "Shared income",
     received_by: "Received by",
     name: "Name",
@@ -81,8 +80,6 @@ const TEXTS = {
     add_income: "Add income",
     add_shared: "Add shared income",
     add_cost: "Add fixed cost",
-    add_value: "Add value",
-    add_bonus: "Add bonus",
     remove: "Remove",
     cancel: "Discard changes",
     save: "Save budget",
@@ -101,8 +98,6 @@ const TEXTS = {
     budget: "Budget",
     budget_per_person: "Budget je Person",
     annual_gross: "Jahresbrutto",
-    bonuses: "Boni (netto)",
-    bonuses_hint: "Teil des Jahresbruttos",
     per_month: "pro Monat",
     per_year: "pro Jahr",
     after_costs: "nach Fixkosten, pro Monat",
@@ -129,8 +124,7 @@ const TEXTS = {
     freq: { 12: "monatlich", 6: "zweimonatlich", 4: "vierteljährlich", 3: "alle vier Monate", 2: "halbjährlich", 1: "jährlich", n: "{n}× jährlich" },
     edit_title: "Budget bearbeiten",
     persons: "Personen",
-    name_of: "Name Person {n}",
-    name_of_optional: "Name Person {n} (optional)",
+    person_name: "Name",
     person_n: "Person {n}",
     net_per_month: "Netto pro Monat",
     categories: "Kategorien",
@@ -139,8 +133,10 @@ const TEXTS = {
     rename_category: "Kategorie umbenennen",
     move_to: "In andere Kategorie verschieben",
     gross_optional: "Jahresbrutto (optional)",
-    one_person_hint: "Für das Budget einer einzelnen Person bleibt der zweite Name leer.",
-    second_person_in_use: "Die zweite Person hat noch Einnahmen. Entferne sie oder trag einen Namen für die zweite Person ein.",
+    one_person_hint: "Für das Budget einer einzelnen Person bleibt der Name leer.",
+    second_person_in_use: "Die zweite Person hat noch Einträge. Entferne sie oder trag einen Namen für die zweite Person ein.",
+    name_optional: "Name (optional)",
+    shared_hint: "Eingang auf dem Konto von {name}",
     shared_income: "Geteilte Einnahmen",
     received_by: "Eingang bei",
     name: "Bezeichnung",
@@ -150,8 +146,6 @@ const TEXTS = {
     add_income: "Einnahme hinzufügen",
     add_shared: "Geteilte Einnahme hinzufügen",
     add_cost: "Fixkosten hinzufügen",
-    add_value: "Wert hinzufügen",
-    add_bonus: "Bonus hinzufügen",
     remove: "Entfernen",
     cancel: "Änderungen verwerfen",
     save: "Budget speichern",
@@ -292,13 +286,14 @@ const buildModel = (data) => {
     })
     .sort((a, b) => b.sum - a.sum);
 
-  // Annual gross: values entered with the income items first, then the free values
-  const gross = [
-    ...data.income
-      .filter((i) => i.annual_gross != null && active.includes(i.person))
-      .map((i) => ({ name: active.length > 1 ? `${i.name} (${data.persons[i.person]})` : i.name, amount: i.annual_gross })),
-    ...data.annual_gross,
-  ];
+  // Annual gross: entered with the income items; the person is shown next to it when there are two
+  const gross = data.income
+    .filter((i) => i.annual_gross != null && active.includes(i.person))
+    .map((i) => ({
+      name: i.name,
+      amount: i.annual_gross,
+      ...(active.length > 1 ? { person: data.persons[i.person], personColor: PERSON_COLORS[i.person] } : {}),
+    }));
 
   const budgetPerPerson = active.map((p) => {
     const own = sum(data.income.filter((i) => i.person === p).map((i) => i.amount));
@@ -319,8 +314,6 @@ const buildModel = (data) => {
     single: active.length === 1,
     gross,
     grossSum: sum(gross.map((i) => i.amount)),
-    bonuses: data.bonuses,
-    bonusSum: sum(data.bonuses.map((i) => i.amount)),
     empty: LISTS.every((k) => !data[k].length),
   };
 };
@@ -536,6 +529,17 @@ class EssentialBudgetCard extends HTMLElement {
       case "remove":
         this._draft[list] = this._draft[list].filter((r) => r._id !== id);
         break;
+      case "addperson":
+        this._addingPerson = true;
+        this._editTab = "b";
+        this._render();
+        this._root.querySelector('[data-list="persons"][data-field="b"]')?.focus();
+        return;
+      case "edittab":
+        this._editTab = key;
+        this._renaming = false;
+        this._moving = null;
+        break;
       case "tab":
         this._costTab = key;
         this._renaming = false;
@@ -584,6 +588,7 @@ class EssentialBudgetCard extends HTMLElement {
     this._saveError = null;
     this._renaming = false;
     this._moving = null;
+    this._addingPerson = false;
   }
 
   /** Categories of the fixed costs in the edit mode (alphabetical, "" = without category). */
@@ -608,8 +613,8 @@ class EssentialBudgetCard extends HTMLElement {
 
   _addRow(list, person) {
     const row = { _id: uid(), name: "", amount: "" };
-    if (list === "income") row.person = person;
-    if (list === "shared_income") row.to = "a";
+    if (list === "income") row.person = person || "a";
+    if (list === "shared_income") row.to = person || "a";
     if (list === "fixed_costs") Object.assign(row, { category: this._activeCostTab(), person: "a", payments_per_year: 12 });
     this._draft[list].push(row);
     this._lastAdded = row._id;
@@ -639,7 +644,7 @@ class EssentialBudgetCard extends HTMLElement {
     if (list === "persons") {
       this._draft.persons[field] = el.value;
       // on leaving the field: show or hide the sections of the second person
-      if (e.type === "change" && activePersons(this._draft.persons).length !== this._editPersons) this._render();
+      if (e.type === "change") this._render(); // tab label and person selects show the new name
       return;
     }
     const row = this._draft[list]?.find((r) => r._id === id);
@@ -652,6 +657,10 @@ class EssentialBudgetCard extends HTMLElement {
       el.setSelectionRange?.(caret - removedBefore, caret - removedBefore);
     }
     row[field] = field === "payments_per_year" ? Number(el.value) : el.value;
+    if (list === "shared_income" && field === "to" && e.type === "change") {
+      this._render(); // moved to the other person's tab
+      return;
+    }
     if (list === "fixed_costs" && field === "category" && e.type === "change") {
       this._moving = null; // moved to another tab
       this._render();
@@ -686,18 +695,22 @@ class EssentialBudgetCard extends HTMLElement {
         return result;
       });
     }
-    this._root.querySelectorAll(AMOUNT_FIELDS.map((f) => `[data-field="${f}"]`).join(",")).forEach((el) => this._markField(el));
     if (activePersons(data.persons).length === 1) {
       // without a second person everything belongs to the first one; income of the second person must be moved or removed first
-      if (data.income.some((r) => r.person === "b")) {
-        this._showSaveError(this.t("second_person_in_use"));
+      if (data.income.some((r) => r.person === "b") || data.shared_income.some((r) => r.to === "b")) {
+        this._showProblem("b", this.t("second_person_in_use"));
         return;
       }
       data.shared_income.forEach((r) => (r.to = "a"));
       data.fixed_costs.forEach((r) => (r.person = "a"));
     }
     if (invalid) {
-      this._showSaveError(this.t("invalid"));
+      // open the tab (and category) of the first invalid amount and mark the fields there
+      const bad = (r) => parseAmount(r.amount) === null || ("annual_gross" in r && String(r.annual_gross ?? "").trim() !== "" && parseAmount(r.annual_gross) === null);
+      const list = LISTS.find((l) => this._draft[l].some(bad));
+      const row = this._draft[list].find(bad);
+      if (list === "fixed_costs") this._costTab = row.category.trim();
+      this._showProblem(list === "fixed_costs" ? "costs" : list === "shared_income" ? row.to : row.person, this.t("invalid"));
       return;
     }
     this._saving = true;
@@ -716,6 +729,14 @@ class EssentialBudgetCard extends HTMLElement {
     }
     this._saving = false;
     this._render();
+  }
+
+  /** Shows a save problem on the given edit tab and marks invalid amounts there. */
+  _showProblem(tab, text) {
+    this._editTab = tab;
+    this._saveError = text;
+    this._render();
+    this._root.querySelectorAll(AMOUNT_FIELDS.map((f) => `[data-field="${f}"]`).join(",")).forEach((el) => this._markField(el));
   }
 
   _showSaveError(text) {
@@ -815,16 +836,22 @@ class EssentialBudgetCard extends HTMLElement {
         .join("")}</div>`;
 
     const rows = (items) =>
-      items.map((i) => `<div class="row"><span class="ellipsis">${esc(i.name)}</span><span>${esc(this._money(i.amount))}</span></div>`).join("");
+      items
+        .map(
+          (i) =>
+            `<div class="row"><span class="row-name"><span class="ellipsis">${esc(i.name)}</span>${i.person ? `<span class="who" style="--c:${i.personColor}">${esc(i.person)}</span>` : ""}</span><span>${esc(this._money(i.amount))}</span></div>`
+        )
+        .join("");
     const perPerson = `<div class="box">${this._section("mdi:wallet-outline", this.t("budget_per_person"))}
       ${m.budgetPerPerson
         .map((p) => `<div class="row"><span class="strong" style="color:${p.color}">${esc(p.name)}</span><span class="strong${negative(p.value)}">${esc(this._money(p.value))}</span></div>`)
         .join("")}</div>`;
     const gross = `<div class="box">${this._section("mdi:calendar-range", this.t("annual_gross"), esc(this._money(m.grossSum)))}${rows(m.gross)}</div>`;
-    const bonuses = `<div class="box">${this._section("mdi:gift-outline", this.t("bonuses"), esc(this._money(m.bonusSum)), `<div class="hint">${esc(this.t("bonuses_hint"))}</div>`)}${rows(m.bonuses)}</div>`;
 
     // With one person the budget per person equals the budget: no extra box
-    return `${this._header()}${kpis}<div class="row1">${income}${costs}</div><div class="row2 ${m.single ? "two" : ""}">${m.single ? "" : perPerson}${gross}${bonuses}</div>`;
+    // second row: only the boxes that have something to show
+    const row2 = [m.single ? "" : perPerson, m.gross.length ? gross : ""].filter(Boolean);
+    return `${this._header()}${kpis}<div class="row1">${income}${costs}</div>${row2.length ? `<div class="row2" style="--cols:${row2.length}">${row2.join("")}</div>` : ""}`;
   }
 
   _renderDetail(m, g) {
@@ -881,8 +908,6 @@ class EssentialBudgetCard extends HTMLElement {
       `<button class="icon-btn remove" data-action="remove" data-list="${list}" data-id="${row._id}" title="${esc(this.t("remove"))}" aria-label="${esc(this.t("remove"))}"><ha-icon icon="mdi:delete-outline"></ha-icon></button>`;
     const add = (list, label, person = "") =>
       `<button class="add" data-action="add" data-list="${list}" ${person ? `data-person="${person}"` : ""}><ha-icon icon="mdi:plus"></ha-icon>${esc(label)}</button>`;
-    const simpleRows = (list) =>
-      d[list].map((r) => `<div class="erow simple" data-id="${r._id}">${input(list, r, "name", this.t("name"))}${amount(list, r)}${remove(list, r)}</div>`).join("");
 
     // Fixed costs are edited per category (tabs); a row belongs to the tab of its category
     const categories = this._costCategories();
@@ -892,32 +917,47 @@ class EssentialBudgetCard extends HTMLElement {
     const active = activePersons(d.persons);
     const single = active.length === 1;
     this._editPersons = active.length;
-    const persons = `<div class="box">${this._section("mdi:account-multiple", this.t("persons"))}<div class="erow persons">${PERSONS.map(
-      (p, i) =>
-        `<label class="field"><span>${esc(this.t(p === "a" ? "name_of" : "name_of_optional", { n: i + 1 }))}</span><input type="text" data-list="persons" data-field="${p}" value="${esc(d.persons[p])}"></label>`
-    ).join("")}</div><div class="hint flat">${esc(this.t("one_person_hint"))}</div></div>`;
 
     // column headers, only shown on wide cards
     const head = (cls, cols) => `<div class="erow ${cls} ehead">${cols.map(([f, label]) => `<span class="f-${f}">${esc(label)}</span>`).join("")}</div>`;
-    // the second person's income stays visible while it has entries, so it can be removed after clearing the name
-    const incomePersons = PERSONS.filter((p) => active.includes(p) || d.income.some((r) => r.person === p));
-    const income = `<div class="box">${this._section("mdi:cash-plus", this.t("income"))}${incomePersons.map(
-      (p, i) => `<div class="esub"><div class="block-head"><span class="dot" style="background:${PERSON_COLORS[p]}"></span>${esc(d.persons[p].trim() || this.t("person_n", { n: i + 1 }))}</div>
-        ${d.income.some((r) => r.person === p) ? head("income", [["name", this.t("name")], ["amount", this.t("net_per_month")], ["gross", this.t("gross_optional")]]) : ""}
-        ${d.income
-          .filter((r) => r.person === p)
+
+    // One tab per person: name, income and shared income received by the person.
+    // The second person's tab stays while it has entries (so they can be removed after clearing the name).
+    const hasEntries = (p) =>
+      d.income.some((r) => r.person === p) || d.shared_income.some((r) => r.to === p);
+    const personTabs = PERSONS.filter((p) => p === "a" || active.includes(p) || hasEntries(p) || this._addingPerson);
+    const personLabel = (p) => d.persons[p].trim() || this.t("person_n", { n: PERSONS.indexOf(p) + 1 });
+
+    const personSection = (p) => {
+      const name = `<div class="box">${this._section("mdi:account", this.t("person_name"))}
+        <label class="field"><span class="sr">${esc(this.t("person_name"))}</span><input type="text" data-list="persons" data-field="${p}" value="${esc(d.persons[p])}" placeholder="${esc(this.t(p === "a" ? "person_name" : "name_optional"))}"></label>
+        ${p === "b" ? `<div class="hint flat">${esc(this.t("one_person_hint"))}</div>` : ""}</div>`;
+      const incomeRows = d.income.filter((r) => r.person === p);
+      const income = `<div class="box">${this._section("mdi:cash-plus", this.t("income"))}
+        ${incomeRows.length ? head("income", [["name", this.t("name")], ["amount", this.t("net_per_month")], ["gross", this.t("gross_optional")]]) : ""}
+        ${incomeRows
           .map(
             (r) =>
               `<div class="erow income flow" data-id="${r._id}">${input("income", r, "name", this.t("name"))}${input("income", r, "amount", this.t("net_per_month"), 'inputmode="decimal" autocomplete="off"')}${input("income", r, "annual_gross", this.t("gross_optional"), 'inputmode="decimal" autocomplete="off"')}${remove("income", r)}</div>`
           )
           .join("")}
-        ${add("income", this.t("add_income"), p)}</div>`
-    ).join("")}</div>`;
-
-    const shared = `<div class="box">${this._section("mdi:account-group-outline", this.t("shared_income"))}
-      ${d.shared_income.length && !single ? head("shared", [["name", this.t("name")], ["to", this.t("received_by")], ["amount", this.t("amount")]]) : ""}
-      ${d.shared_income.map((r) => `<div class="erow ${single ? "simple" : "shared flow"}" data-id="${r._id}">${input("shared_income", r, "name", this.t("name"))}${single ? "" : personSelect("shared_income", r, "to", this.t("received_by"))}${amount("shared_income", r)}${remove("shared_income", r)}</div>`).join("")}
-      ${add("shared_income", this.t("add_shared"))}</div>`;
+        ${add("income", this.t("add_income"), p)}</div>`;
+      // shared income is listed with the person whose account receives it; with one person only while entries exist
+      const sharedRows = d.shared_income.filter((r) => r.to === p);
+      const shared =
+        single && !d.shared_income.length
+          ? ""
+          : `<div class="box">${this._section("mdi:account-group-outline", this.t("shared_income"), "", `<div class="hint">${esc(this.t("shared_hint", { name: personLabel(p) }))}</div>`)}
+        ${sharedRows.length && !single ? head("shared", [["name", this.t("name")], ["to", this.t("received_by")], ["amount", this.t("amount")]]) : ""}
+        ${sharedRows
+          .map(
+            (r) =>
+              `<div class="erow ${single ? "simple" : "shared flow"}" data-id="${r._id}">${input("shared_income", r, "name", this.t("name"))}${single ? "" : personSelect("shared_income", r, "to", this.t("received_by"))}${amount("shared_income", r)}${remove("shared_income", r)}</div>`
+          )
+          .join("")}
+        ${add("shared_income", this.t("add_shared"), p)}</div>`;
+      return name + income + shared;
+    };
 
     const tabs = `<div class="tabs" role="tablist" aria-label="${esc(this.t("categories"))}">${categories
       .map((c) =>
@@ -945,9 +985,6 @@ class EssentialBudgetCard extends HTMLElement {
         .join("")}
       ${add("fixed_costs", this.t("add_cost"))}</div>`;
 
-    const gross = `<div class="box">${this._section("mdi:calendar-range", this.t("annual_gross"))}${simpleRows("annual_gross")}${add("annual_gross", this.t("add_value"))}</div>`;
-    const bonuses = `<div class="box">${this._section("mdi:gift-outline", this.t("bonuses"), "", `<div class="hint">${esc(this.t("bonuses_hint"))}</div>`)}${simpleRows("bonuses")}${add("bonuses", this.t("add_bonus"))}</div>`;
-
     const saved = this._savedAt && Date.now() - this._savedAt < SAVED_NOTE_MS;
     const footer = `<div class="box footer">
       <div class="save-error" ${this._saveError ? "" : "hidden"}>${esc(this._saveError || "")}</div>
@@ -957,9 +994,17 @@ class EssentialBudgetCard extends HTMLElement {
       <button class="btn primary" data-action="save" ${this._saving ? "disabled" : ""}>${esc(this.t(this._saving ? "saving" : "save"))}</button>
     </div>`;
 
-    // With one person shared income is just income: the section only stays while it still has entries
-    const showShared = !single || d.shared_income.length > 0;
-    return `<div class="header"><h1 class="title">${esc(this.t("edit_title"))}</h1></div><div class="hint flat">${esc(this.t("editor_hint"))}</div>${persons}${income}${showShared ? shared : ""}${costs}${gross}${bonuses}${footer}`;
+    const keys = [...personTabs, "costs"];
+    const current = keys.includes(this._editTab) ? this._editTab : keys[0];
+    this._editTab = current;
+    const tabButton = (k) =>
+      `<button class="edit-tab ${k === current ? "active" : ""}" role="tab" aria-selected="${k === current}" data-action="edittab" data-key="${k}">${
+        k === "costs" ? esc(this.t("fixed_costs")) : `<span class="dot" style="background:${PERSON_COLORS[k]}"></span>${esc(personLabel(k))}`
+      }</button>`;
+    // "+ Person" sits after the person tabs, before the fixed costs
+    const addPerson = personTabs.includes("b") ? "" : `<button class="edit-tab add-person" data-action="addperson"><ha-icon icon="mdi:plus"></ha-icon>${esc(this.t("person"))}</button>`;
+    const editTabs = `<div class="edit-tabs" role="tablist">${personTabs.map(tabButton).join("")}${addPerson}${tabButton("costs")}</div>`;
+    return `<div class="header"><h1 class="title">${esc(this.t("edit_title"))}</h1></div><div class="hint flat">${esc(this.t("editor_hint"))}</div>${editTabs}${current === "costs" ? costs : personSection(current)}${footer}`;
   }
 }
 
@@ -1141,6 +1186,15 @@ const STYLE = `
   .field input.invalid { background: color-mix(in srgb, var(--error-color, #db4437) 18%, transparent); border-color: var(--error-color, #db4437); }
   .remove { width: 40px; height: 40px; }
   .toggle-space { width: 44px; flex-shrink: 0; }
+  .row-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .who { flex-shrink: 0; font-size: 12px; font-weight: 600; color: var(--c); }
+  .edit-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--divider-color); scrollbar-width: thin; }
+  .edit-tab { flex-shrink: 0; height: 44px; padding: 0 16px; border: 0; border-bottom: 3px solid transparent; background: transparent;
+    cursor: pointer; font-size: 14px; font-weight: 600; color: var(--secondary-text-color); white-space: nowrap; }
+  .edit-tab.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+  .edit-tab { display: inline-flex; align-items: center; gap: 8px; }
+  .edit-tab.add-person { color: var(--primary-color); font-weight: 500; }
+  .edit-tab.add-person ha-icon { --mdc-icon-size: 18px; }
   .tabs { display: flex; gap: 8px; align-items: center; overflow-x: auto; padding: 2px 2px 12px; scrollbar-width: thin; }
   .tab { flex-shrink: 0; height: 36px; padding: 0 14px; border-radius: 18px; cursor: pointer; white-space: nowrap;
     border: 1px solid var(--divider-color); background: transparent; font-size: 14px; font-weight: 500; }
@@ -1188,7 +1242,7 @@ const STYLE = `
     .kpi .value { font-size: 28px; }
     .kpi.small .value { font-size: 24px; }
     .row1 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .row2 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .row2 { grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); }
     .drow { grid-template-columns: minmax(0, 1fr) 140px 130px 120px 100px 100px; grid-template-areas: "name person freq paid month year"; padding: 10px 0; min-height: 28px; }
     .d-paid { text-align: right; font-size: 14px; }
     .d-freq { display: block; grid-area: freq; font-size: 14px; color: var(--secondary-text-color); }
@@ -1197,7 +1251,6 @@ const STYLE = `
     .dhead > span { font-size: 11px; color: var(--secondary-text-color); }
     .dsum { grid-template-areas: "name person freq paid month year"; }
     .table.single .drow, .table.single .dsum { grid-template-columns: minmax(0, 1fr) 130px 120px 100px 100px; grid-template-areas: "name freq paid month year"; }
-    .row2.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .erow.cost.single { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 160px 120px 40px; grid-template-areas: "name category freq amount remove"; }
     .narrow-only { display: none; }
     .wide-only { display: inline; }

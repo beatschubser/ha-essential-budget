@@ -1,14 +1,14 @@
 /* Essential Budget card for Home Assistant (loaded automatically by the integration).
  *
- * - EssentialBudgetCard shows the budget and has an edit mode (pencil button, admins only).
- *   The data comes from the integration via WebSocket and is saved to /config/essential_budget.json.
- * - EssentialBudgetCardEditor is the visual card editor (only the optional title; grid options are kept).
+ * - EssentialBudgetCard shows the budget. In the preview of the dashboard card editor it opens in
+ *   edit mode; the budget is then saved with its own button to /config/essential_budget.json.
+ * - EssentialBudgetCardEditor is the visual card editor (title and currency; grid options are kept).
  *
  * All amounts are stored with cents and shown rounded to whole currency units.
  * Layout: one column on narrow cards, desktop layout from DESKTOP_WIDTH (container query).
  */
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0-beta.1";
 const WS = "essential_budget";
 const PERSONS = ["a", "b"];
 const PERSON_COLORS = { a: "#2f6fde", b: "#d9822b", shared: "#7a8794" };
@@ -17,6 +17,9 @@ const PALETTE = ["#2f6fde", "#7c5cd6", "#d9822b", "#1f8f74", "#b0436e", "#0e7c99
 const FREQUENCIES = [12, 6, 4, 3, 2, 1]; // offered first in the edit mode; any value from 1 to 12 is valid
 const LISTS = ["income", "shared_income", "fixed_costs", "annual_gross", "bonuses"];
 const AMOUNT_FIELDS = ["amount", "annual_gross"]; // text fields in the edit mode that hold amounts
+const DEFAULT_CURRENCY = "EUR";
+const CURRENCIES = ["EUR", "CHF", "USD", "GBP", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF"];
+const SAVED_NOTE_MS = 4000; // how long "Saved" is shown in the edit mode
 
 /* ---------------------------------------------------------------------
  * Texts (English is the fallback)
@@ -48,9 +51,8 @@ const TEXTS = {
     collapse: "Collapse {c}",
     open_details: "{c}: show details",
     back: "Back to overview",
-    edit: "Edit budget",
     empty: "No entries yet.",
-    empty_admin: "No entries yet. Use the pencil to enter your budget.",
+    empty_admin: "No entries yet. Edit this card in the dashboard editor to enter your budget.",
     error: "The budget could not be loaded",
     not_set_up: "Essential Budget is not set up yet (Settings > Devices & services).",
     update_available: "Essential Budget was updated. Tap to reload the page.",
@@ -77,8 +79,12 @@ const TEXTS = {
     add_value: "Add value",
     add_bonus: "Add bonus",
     remove: "Remove",
-    cancel: "Cancel",
-    save: "Save",
+    cancel: "Discard changes",
+    save: "Save budget",
+    saved: "Saved",
+    editor_hint: "Save the budget with the button below. The save button of this dialog only saves the card options.",
+    currency: "Currency",
+    title_optional: "Title (optional)",
     saving: "Saving …",
     invalid: "Please check the marked fields.",
     save_failed: "Saving failed",
@@ -109,9 +115,8 @@ const TEXTS = {
     collapse: "{c} zuklappen",
     open_details: "{c}: Details öffnen",
     back: "Zurück zur Übersicht",
-    edit: "Budget bearbeiten",
     empty: "Noch keine Einträge.",
-    empty_admin: "Noch keine Einträge. Über den Stift erfasst du dein Budget.",
+    empty_admin: "Noch keine Einträge. Bearbeite die Karte im Dashboard-Editor, um dein Budget zu erfassen.",
     error: "Das Budget konnte nicht geladen werden",
     not_set_up: "Essential Budget ist noch nicht eingerichtet (Einstellungen > Geräte & Dienste).",
     update_available: "Essential Budget wurde aktualisiert. Tippen, um die Seite neu zu laden.",
@@ -138,8 +143,12 @@ const TEXTS = {
     add_value: "Wert hinzufügen",
     add_bonus: "Bonus hinzufügen",
     remove: "Entfernen",
-    cancel: "Abbrechen",
-    save: "Speichern",
+    cancel: "Änderungen verwerfen",
+    save: "Budget speichern",
+    saved: "Gespeichert",
+    editor_hint: "Das Budget speicherst du mit dem Button unten. Der Speichern-Button dieses Dialogs speichert nur die Kartenoptionen.",
+    currency: "Währung",
+    title_optional: "Titel (optional)",
     saving: "Speichert …",
     invalid: "Bitte die markierten Felder prüfen.",
     save_failed: "Speichern fehlgeschlagen",
@@ -210,6 +219,14 @@ const parseAmount = (text) => {
   if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
   const value = Math.round(Number(s) * 100) / 100;
   return Number.isFinite(value) ? value : null;
+};
+
+/** True if the card is shown in the preview of the dashboard card editor (also across shadow roots). */
+const inCardEditor = (el) => {
+  for (let n = el; n; n = n.parentNode || n.host) {
+    if (/^(HUI-CARD-PREVIEW|HUI-DIALOG-EDIT-CARD|HUI-CARD-ELEMENT-EDITOR)$/.test(n.tagName || "")) return true;
+  }
+  return false;
 };
 
 /** Negative if version a is older than b. "0.2.0-beta.1" is older than "0.2.0". */
@@ -324,6 +341,23 @@ class EssentialBudgetCard extends HTMLElement {
     if (this._hass) this._render();
   }
 
+  /** Set by Home Assistant for the preview in the card editor: there the card opens in edit mode. */
+  set preview(value) {
+    this._preview = !!value;
+    if (this._autoEdit()) this._render();
+  }
+
+  get _inEditor() {
+    return this._preview || inCardEditor(this);
+  }
+
+  /** Starts the edit mode in the card editor preview; true if it did. */
+  _autoEdit() {
+    if (this._draft || !this._data || !this._isAdmin || !this._inEditor) return false;
+    this._startEdit();
+    return true;
+  }
+
   set hass(hass) {
     const first = !this._hass;
     const langChanged = this._hass && pickLocale(hass) !== this._locale;
@@ -348,6 +382,7 @@ class EssentialBudgetCard extends HTMLElement {
 
   connectedCallback() {
     if (this._hass) this._subscribe();
+    if (this._autoEdit()) this._render();
   }
 
   disconnectedCallback() {
@@ -368,12 +403,26 @@ class EssentialBudgetCard extends HTMLElement {
     try {
       return new Intl.NumberFormat(this._locale, {
         style: "currency",
-        currency: this._currency || "EUR",
+        currency: this._currencyCode,
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
       }).format(value);
     } catch (e) {
-      return `${Math.round(value)} ${this._currency || ""}`.trim();
+      return `${Math.round(value)} ${this._currencyCode}`;
+    }
+  }
+
+  get _currencyCode() {
+    return String(this._config.currency || DEFAULT_CURRENCY).trim().toUpperCase();
+  }
+
+  /** Symbol shown next to amount fields, e.g. "€" (the code if the browser does not know it). */
+  get _currencySymbol() {
+    try {
+      const parts = new Intl.NumberFormat(this._locale, { style: "currency", currency: this._currencyCode }).formatToParts(0);
+      return parts.find((p) => p.type === "currency")?.value || this._currencyCode;
+    } catch (e) {
+      return this._currencyCode;
     }
   }
 
@@ -408,10 +457,10 @@ class EssentialBudgetCard extends HTMLElement {
     try {
       const result = await this._hass.callWS({ type: `${WS}/get` });
       this._data = result.data;
-      this._currency = result.currency;
       this._file = result.file;
       this._error = null;
       this._notSetUp = false;
+      this._autoEdit();
     } catch (e) {
       this._notSetUp = e?.code === "not_found";
       this._error = errorText(e);
@@ -448,12 +497,11 @@ class EssentialBudgetCard extends HTMLElement {
       case "back":
         this._detail = null;
         break;
-      case "edit":
-        this._startEdit();
-        break;
       case "cancel":
+        // discard: start again from the saved budget (in the card editor the edit mode stays open)
         this._draft = null;
         this._saveError = null;
+        this._autoEdit();
         break;
       case "save":
         this._save();
@@ -517,6 +565,13 @@ class EssentialBudgetCard extends HTMLElement {
     }
     const row = this._draft[list]?.find((r) => r._id === id);
     if (!row) return;
+    if (AMOUNT_FIELDS.includes(field) && /[^\d.,]/.test(el.value)) {
+      // only digits and separators: a pasted currency sign or spaces are removed right away
+      const caret = el.selectionStart ?? el.value.length;
+      const removedBefore = el.value.slice(0, caret).replace(/[\d.,]/g, "").length;
+      el.value = el.value.replace(/[^\d.,]/g, "");
+      el.setSelectionRange?.(caret - removedBefore, caret - removedBefore);
+    }
     row[field] = field === "payments_per_year" ? Number(el.value) : el.value;
     if (el.classList.contains("invalid")) this._markField(el);
   }
@@ -568,6 +623,10 @@ class EssentialBudgetCard extends HTMLElement {
       this._data = result.data;
       this._draft = null;
       this._saveError = null;
+      this._autoEdit(); // continue editing with the saved values
+      this._savedAt = Date.now();
+      clearTimeout(this._savedTimer);
+      this._savedTimer = setTimeout(() => this._draft && this._render(), SAVED_NOTE_MS + 50);
     } catch (e) {
       this._saveError = `${this.t("save_failed")}: ${errorText(e)}`;
     }
@@ -609,12 +668,7 @@ class EssentialBudgetCard extends HTMLElement {
   }
 
   _header() {
-    if (!this._config.title && !this._isAdmin) return "";
-    const title = this._config.title ? `<h1 class="title">${esc(this._config.title)}</h1>` : "<span></span>";
-    const edit = this._isAdmin
-      ? `<button class="icon-btn" data-action="edit" title="${esc(this.t("edit"))}" aria-label="${esc(this.t("edit"))}"><ha-icon icon="mdi:pencil"></ha-icon></button>`
-      : "";
-    return `<div class="header">${title}${edit}</div>`;
+    return this._config.title ? `<div class="header"><h1 class="title">${esc(this._config.title)}</h1></div>` : "";
   }
 
   _section(icon, title, right = "", extra = "") {
@@ -644,7 +698,7 @@ class EssentialBudgetCard extends HTMLElement {
     const costs = `<div class="box">${this._section("mdi:receipt-text-outline", this.t("fixed_costs"), esc(`${this._money(m.costTotal)} ${this.t("per_month")}`))}
       ${m.groups
         .map((g) => {
-          const open = this._open.has(g.category);
+          const open = g.items.length > 1 && this._open.has(g.category); // a single item needs no expanding
           const name = categoryName(g);
           const maxItem = Math.max(...g.items.map((c) => c.monthly), 0);
           const items = open
@@ -659,7 +713,9 @@ class EssentialBudgetCard extends HTMLElement {
             : "";
           return `<div class="cat">
             <div class="cat-row">
-              <button class="icon-btn" data-action="toggle" data-key="${esc(g.category)}" aria-expanded="${open}" aria-label="${esc(this.t(open ? "collapse" : "expand", { c: name }))}"><ha-icon icon="mdi:chevron-${open ? "down" : "right"}"></ha-icon></button>
+              ${g.items.length > 1
+                ? `<button class="icon-btn" data-action="toggle" data-key="${esc(g.category)}" aria-expanded="${open}" aria-label="${esc(this.t(open ? "collapse" : "expand", { c: name }))}"><ha-icon icon="mdi:chevron-${open ? "down" : "right"}"></ha-icon></button>`
+                : `<span class="toggle-space"></span>`}
               <button class="cat-btn" data-action="detail" data-key="${esc(g.category)}" aria-label="${esc(this.t("open_details", { c: name }))}">
                 <span class="cat-main"><span class="ellipsis strong">${esc(name)}</span><span class="bar"><i style="width:${maxGroup ? (g.sum / maxGroup) * 100 : 0}%;background:${g.color}"></i></span></span>
                 <span class="cat-share">${pct(g.sum, m.costTotal)} %</span>
@@ -713,8 +769,13 @@ class EssentialBudgetCard extends HTMLElement {
 
   _renderEdit() {
     const d = this._draft;
-    const input = (list, row, field, label, extra = "") =>
-      `<label class="field f-${field}"><span class="sr">${esc(label)}</span><input type="text" placeholder="${esc(label)}" data-list="${list}" data-id="${row._id}" data-field="${field}" value="${esc(row[field])}" ${extra}></label>`;
+    const symbol = esc(this._currencySymbol);
+    const input = (list, row, field, label, extra = "") => {
+      const control = `<input type="text" placeholder="${esc(label)}" data-list="${list}" data-id="${row._id}" data-field="${field}" value="${esc(row[field])}" ${extra}>`;
+      // amounts: the currency sign is part of the field but not of the text
+      const body = AMOUNT_FIELDS.includes(field) ? `<span class="money">${control}<span class="cur" aria-hidden="true">${symbol}</span></span>` : control;
+      return `<label class="field f-${field}"><span class="sr">${esc(label)}</span>${body}</label>`;
+    };
     const amount = (list, row) => input(list, row, "amount", this.t("amount"), 'inputmode="decimal" autocomplete="off"');
     const personSelect = (list, row, field, label) =>
       `<label class="field f-${field}"><span class="sr">${esc(label)}</span><select data-list="${list}" data-id="${row._id}" data-field="${field}">${PERSONS.map(
@@ -756,7 +817,7 @@ class EssentialBudgetCard extends HTMLElement {
           .filter((r) => r.person === p)
           .map(
             (r) =>
-              `<div class="erow income" data-id="${r._id}">${input("income", r, "name", this.t("name"))}${input("income", r, "amount", this.t("net_per_month"), 'inputmode="decimal" autocomplete="off"')}${input("income", r, "annual_gross", this.t("gross_optional"), 'inputmode="decimal" autocomplete="off"')}${remove("income", r)}</div>`
+              `<div class="erow income flow" data-id="${r._id}">${input("income", r, "name", this.t("name"))}${input("income", r, "amount", this.t("net_per_month"), 'inputmode="decimal" autocomplete="off"')}${input("income", r, "annual_gross", this.t("gross_optional"), 'inputmode="decimal" autocomplete="off"')}${remove("income", r)}</div>`
           )
           .join("")}
         ${add("income", this.t("add_income"), p)}</div>`
@@ -764,7 +825,7 @@ class EssentialBudgetCard extends HTMLElement {
 
     const shared = `<div class="box">${this._section("mdi:account-group-outline", this.t("shared_income"))}
       ${d.shared_income.length && !single ? head("shared", [["name", this.t("name")], ["to", this.t("received_by")], ["amount", this.t("amount")]]) : ""}
-      ${d.shared_income.map((r) => `<div class="erow ${single ? "simple" : "shared"}" data-id="${r._id}">${input("shared_income", r, "name", this.t("name"))}${single ? "" : personSelect("shared_income", r, "to", this.t("received_by"))}${amount("shared_income", r)}${remove("shared_income", r)}</div>`).join("")}
+      ${d.shared_income.map((r) => `<div class="erow ${single ? "simple" : "shared flow"}" data-id="${r._id}">${input("shared_income", r, "name", this.t("name"))}${single ? "" : personSelect("shared_income", r, "to", this.t("received_by"))}${amount("shared_income", r)}${remove("shared_income", r)}</div>`).join("")}
       ${add("shared_income", this.t("add_shared"))}</div>`;
 
     const costs = `<div class="box">${this._section("mdi:receipt-text-outline", this.t("fixed_costs"))}
@@ -772,7 +833,7 @@ class EssentialBudgetCard extends HTMLElement {
       <datalist id="eb-categories">${categories.map((c) => `<option value="${esc(c)}"></option>`).join("")}</datalist>
       ${d.fixed_costs
         .map(
-          (r) => `<div class="erow cost ${single ? "single" : ""}" data-id="${r._id}">${input("fixed_costs", r, "name", this.t("name"))}${input("fixed_costs", r, "category", this.t("category"), 'list="eb-categories"')}${single ? "" : personSelect("fixed_costs", r, "person", this.t("paid_by"))}${freqSelect(r)}${amount("fixed_costs", r)}${remove("fixed_costs", r)}</div>`
+          (r) => `<div class="erow cost flow ${single ? "single" : ""}" data-id="${r._id}">${input("fixed_costs", r, "name", this.t("name"))}${input("fixed_costs", r, "category", this.t("category"), 'list="eb-categories"')}${single ? "" : personSelect("fixed_costs", r, "person", this.t("paid_by"))}${freqSelect(r)}${amount("fixed_costs", r)}${remove("fixed_costs", r)}</div>`
         )
         .join("")}
       ${add("fixed_costs", this.t("add_cost"))}</div>`;
@@ -780,8 +841,10 @@ class EssentialBudgetCard extends HTMLElement {
     const gross = `<div class="box">${this._section("mdi:calendar-range", this.t("annual_gross"))}${simpleRows("annual_gross")}${add("annual_gross", this.t("add_value"))}</div>`;
     const bonuses = `<div class="box">${this._section("mdi:gift-outline", this.t("bonuses"), "", `<div class="hint">${esc(this.t("bonuses_hint"))}</div>`)}${simpleRows("bonuses")}${add("bonuses", this.t("add_bonus"))}</div>`;
 
+    const saved = this._savedAt && Date.now() - this._savedAt < SAVED_NOTE_MS;
     const footer = `<div class="box footer">
       <div class="save-error" ${this._saveError ? "" : "hidden"}>${esc(this._saveError || "")}</div>
+      ${saved && !this._saveError ? `<div class="saved"><ha-icon icon="mdi:check-circle"></ha-icon>${esc(this.t("saved"))}</div>` : ""}
       <span class="hint grow">${esc(this.t("file_hint", { file: this._file || "essential_budget.json" }))}</span>
       <button class="btn" data-action="cancel" ${this._saving ? "disabled" : ""}>${esc(this.t("cancel"))}</button>
       <button class="btn primary" data-action="save" ${this._saving ? "disabled" : ""}>${esc(this.t(this._saving ? "saving" : "save"))}</button>
@@ -789,12 +852,12 @@ class EssentialBudgetCard extends HTMLElement {
 
     // With one person shared income is just income: the section only stays while it still has entries
     const showShared = !single || d.shared_income.length > 0;
-    return `<div class="header"><h1 class="title">${esc(this.t("edit_title"))}</h1></div>${persons}${income}${showShared ? shared : ""}${costs}${gross}${bonuses}${footer}`;
+    return `<div class="header"><h1 class="title">${esc(this.t("edit_title"))}</h1></div><div class="hint flat">${esc(this.t("editor_hint"))}</div>${persons}${income}${showShared ? shared : ""}${costs}${gross}${bonuses}${footer}`;
   }
 }
 
 /* =====================================================================
- * Card editor (only the title; all other keys like grid_options are kept)
+ * Card editor (title and currency; all other keys like grid_options are kept)
  * ===================================================================== */
 
 class EssentialBudgetCardEditor extends HTMLElement {
@@ -814,18 +877,25 @@ class EssentialBudgetCardEditor extends HTMLElement {
     if (!this._hass || !this._config) return;
     if (!this._form) {
       this._form = document.createElement("ha-form");
-      this._form.computeLabel = () => (pickLanguage(this._hass) === "de" ? "Titel (optional)" : "Title (optional)");
+      const texts = TEXTS[pickLanguage(this._hass)];
+      this._form.computeLabel = (field) => (field.name === "currency" ? texts.currency : texts.title_optional);
       this._form.addEventListener("value-changed", (e) => {
         const config = { ...this._config, ...e.detail.value };
         if (!config.title) delete config.title;
+        // only a currency other than the default is stored
+        if (config.currency) config.currency = String(config.currency).trim().toUpperCase();
+        if (!config.currency || config.currency === DEFAULT_CURRENCY) delete config.currency;
         this._config = config;
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
       });
       this.append(this._form);
     }
     this._form.hass = this._hass;
-    this._form.schema = [{ name: "title", selector: { text: {} } }];
-    this._form.data = { title: this._config.title || "" };
+    this._form.schema = [
+      { name: "title", selector: { text: {} } },
+      { name: "currency", selector: { select: { mode: "dropdown", custom_value: true, options: CURRENCIES } } },
+    ];
+    this._form.data = { title: this._config.title || "", currency: this._config.currency || DEFAULT_CURRENCY };
   }
 }
 
@@ -884,6 +954,7 @@ const STYLE = `
   .hint { font-size: 12px; color: var(--secondary-text-color); margin: -6px 0 6px 32px; }
   .footer .hint { margin: 0; flex-basis: 100%; }
   .hint.flat { margin: 6px 0 0; }
+  .header + .hint.flat { margin: -4px 0 0; }
   .table.single .d-person { display: none; }
   .table.single .drow { grid-template-areas: "name month" "paid year"; }
   .table.single .dsum { grid-template-areas: "name month" ". year"; }
@@ -962,6 +1033,25 @@ const STYLE = `
   .field.f-amount input { text-align: right; font-variant-numeric: tabular-nums; }
   .field input.invalid { background: color-mix(in srgb, var(--error-color, #db4437) 18%, transparent); border-color: var(--error-color, #db4437); }
   .remove { width: 40px; height: 40px; }
+  .toggle-space { width: 44px; flex-shrink: 0; }
+  .money { display: flex; align-items: center; height: 40px; box-sizing: border-box; border-radius: 8px;
+    border: 1px solid var(--divider-color); background: var(--ha-card-background, var(--card-background-color)); }
+  .money:focus-within { outline: 2px solid var(--primary-color); outline-offset: -1px; }
+  .field .money input { flex: 1; width: 100%; height: 38px; border: 0; background: transparent; padding-right: 4px; }
+  .field .money input:focus { outline: none; }
+  .money .cur { padding: 0 10px 0 2px; font-size: 14px; color: var(--secondary-text-color); user-select: none; }
+  .money:has(input.invalid) { background: color-mix(in srgb, var(--error-color, #db4437) 18%, transparent); border-color: var(--error-color, #db4437); }
+  .field .money input.invalid { background: transparent; }
+  /* narrow cards: name and delete on top, the other fields side by side as far as they fit */
+  .erow.flow { display: flex; flex-wrap: wrap; }
+  .erow.flow .f-name { flex: 1 1 calc(100% - 50px); order: 0; }
+  .erow.flow .remove { order: 1; }
+  .erow.flow .field:not(.f-name) { order: 5; flex: 1 1 92px; min-width: 0; }
+  .erow.flow .field.f-category { order: 2; flex: 1 1 90px; }
+  .erow.flow .field.f-amount { order: 3; }
+  .erow.flow .field.f-freq { order: 4; flex: 1 1 104px; }
+  .saved { display: inline-flex; align-items: center; gap: 6px; color: var(--success-color, #43a047); font-weight: 500; }
+  .saved ha-icon { --mdc-icon-size: 18px; }
   .add { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; margin-top: 6px; padding: 0 12px 0 8px;
     border: 1px dashed var(--divider-color); border-radius: 20px; background: transparent; cursor: pointer; color: var(--primary-color); font-weight: 500; }
   .add ha-icon { --mdc-icon-size: 18px; }
@@ -994,6 +1084,7 @@ const STYLE = `
     .erow.shared { grid-template-columns: minmax(0, 1fr) 160px 120px 40px; grid-template-areas: "name to amount remove"; }
     .erow.cost { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 140px 160px 120px 40px; grid-template-areas: "name category person freq amount remove"; }
     .erow.simple { grid-template-columns: minmax(0, 1fr) 140px 40px; }
+    .erow.flow { display: grid; }
     .erow.income { grid-template-columns: minmax(0, 1fr) 140px 180px 40px; grid-template-areas: "name amount gross remove"; }
     .erow.income .f-amount .sr, .erow.income .f-annual_gross .sr { position: absolute; width: 1px; height: 1px; clip: rect(0 0 0 0); overflow: hidden; }
     .ehead { display: grid; padding: 0 0 2px; border-top: 0; font-size: 12px; color: var(--secondary-text-color); }

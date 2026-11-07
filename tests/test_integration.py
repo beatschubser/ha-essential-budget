@@ -85,7 +85,6 @@ async def test_file_created_and_saved(hass: HomeAssistant, hass_ws_client) -> No
     result = (await client.receive_json())["result"]
     assert result["data"] == saved
     assert result["file"] == DATA_FILE
-    assert "currency" in result
 
     # invalid data is rejected and the file stays unchanged
     bad = {**BUDGET, "fixed_costs": [{"name": "X", "person": "a", "amount": 1, "payments_per_year": 0}]}

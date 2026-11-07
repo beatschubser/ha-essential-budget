@@ -13,9 +13,9 @@ A static household budget for Home Assistant, for one or two persons: monthly ne
 - **Categories** sorted by size with share and bar; expand a category to see its items, or open it for all details (amount per payment, per month, per year)
 - **Budget per person** (with two persons): own income + shared income received by the person − fixed costs paid by the person; negative values are shown in red
 - **Annual gross:** the annual gross entered with the income items plus free yearly values, with total; **bonuses (net)** as free yearly values
-- **Edit mode** directly in the card (pencil button, administrators only)
+- **Editing in the card editor:** open the card in the dashboard editor and the preview shows the budget in edit mode (saved with its own button; administrators only)
 - Desktop layout on wide cards, one column on phones; follows the colors of your theme
-- English and German; amounts in the currency of Home Assistant, stored with cents and shown in whole units
+- English and German; amounts stored with cents and shown in whole units, currency selectable per card (default EUR)
 
 ## Installation
 
@@ -27,10 +27,11 @@ The card is registered automatically. Add it to a dashboard with **Add card > Es
 
 ```yaml
 type: custom:essential-budget-card
-title: Budget  # optional
+title: Budget   # optional
+currency: CHF   # optional, ISO code, default EUR
 ```
 
-The visual editor of the card only has the optional title; size and position are set in the dashboard as usual.
+To enter or change the budget, edit the dashboard and open the card: the preview on the right is in edit mode. Save the budget with **Save budget** below the entries; the save button of the dialog only saves the card options (title, currency, size).
 
 ## Your data
 

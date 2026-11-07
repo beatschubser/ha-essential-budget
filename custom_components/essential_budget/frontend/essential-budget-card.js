@@ -1334,8 +1334,8 @@ const STYLE = `
 
   .section-head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; }
   .section-head ha-icon { color: var(--primary-color); }
-  .section-head h2 { margin: 0; flex: 1; font-size: 16px; font-weight: 600; }
-  .head-value { font-size: 14px; font-weight: 600; }
+  .section-head h2 { margin: 0; flex: 1; font-size: 17px; font-weight: 600; }
+  .head-value { font-size: 16px; font-weight: 600; }
   .hint { font-size: 12px; color: var(--secondary-text-color); margin: -6px 0 6px 32px; }
   .footer .hint { margin: 0; flex-basis: 100%; }
   .hint.flat { margin: 6px 0 0; }
@@ -1347,7 +1347,7 @@ const STYLE = `
   .blocks { display: flex; flex-direction: column; gap: 10px; }
   .block { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 10px;
     background: color-mix(in srgb, var(--primary-text-color) 4%, transparent); }
-  .block-head { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+  .block-head { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; }
   .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .dot.square { width: 14px; height: 14px; border-radius: 4px; }
   .line { display: flex; justify-content: space-between; gap: 12px; padding-left: 18px; font-size: 13px; color: var(--secondary-text-color); }

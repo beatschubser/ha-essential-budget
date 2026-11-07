@@ -63,7 +63,6 @@ const TEXTS = {
     restart_needed: "Essential Budget was updated. Please restart Home Assistant.",
     freq: { 1: "monthly", 2: "every two months", 3: "quarterly", 6: "half-yearly", 12: "yearly", n: "every {n} months" },
     freq_custom: "Other interval …",
-    every: "every",
     months: "months",
     interval_label: "Interval in months",
     color: "Color",
@@ -149,7 +148,6 @@ const TEXTS = {
     restart_needed: "Essential Budget wurde aktualisiert. Bitte Home Assistant neu starten.",
     freq: { 1: "monatlich", 2: "zweimonatlich", 3: "vierteljährlich", 6: "halbjährlich", 12: "jährlich", n: "alle {n} Monate" },
     freq_custom: "Anderer Turnus …",
-    every: "alle",
     months: "Monate",
     interval_label: "Turnus in Monaten",
     color: "Farbe",
@@ -762,7 +760,7 @@ class EssentialBudgetCard extends HTMLElement {
       el.setSelectionRange?.(caret - removedBefore, caret - removedBefore);
     }
     if (field === "interval_select") {
-      // fixed intervals or "Other interval": a number field for the months appears
+      // fixed intervals or "Other interval": the select becomes a number field for the months
       if (el.value === "custom") row._custom = true;
       else Object.assign(row, { interval_months: el.value, _custom: false });
       this._render();
@@ -773,6 +771,12 @@ class EssentialBudgetCard extends HTMLElement {
       el.value = el.value.replace(/\D/g, "");
       row.interval_months = el.value;
       if (el.classList.contains("invalid")) el.classList.toggle("invalid", !validInterval(el.value));
+      // on leaving the field: 1, 3 or 12 months go back to the select
+      if (e.type === "change" && INTERVALS.includes(Number(el.value))) {
+        row.interval_months = String(Number(el.value));
+        row._custom = false;
+        this._render();
+      }
       return;
     }
     row[field] = el.value;
@@ -1034,13 +1038,12 @@ class EssentialBudgetCard extends HTMLElement {
       `<label class="field f-${field}"><span class="sr">${esc(label)}</span><select data-list="${list}" data-id="${row._id}" data-field="${field}">${PERSONS.map(
         (p) => `<option value="${p}" ${row[field] === p ? "selected" : ""}>${esc(d.persons[p] || p.toUpperCase())}</option>`
       ).join("")}</select></label>`;
-    // monthly, quarterly, yearly or any other number of months ("every N months" below the select)
+    // monthly, quarterly, yearly or any other number of months: then the select becomes a field "N Monate"
     const freqSelect = (row) => {
-      const options = INTERVALS.map((n) => `<option value="${n}" ${!row._custom && String(n) === String(row.interval_months) ? "selected" : ""}>${esc(this._freq(n))}</option>`).join("");
-      const custom = row._custom
-        ? `<div class="field f-interval"><span class="interval"><span>${esc(this.t("every"))}</span><input type="text" inputmode="numeric" autocomplete="off" maxlength="3" aria-label="${esc(this.t("interval_label"))}" data-list="fixed_costs" data-id="${row._id}" data-field="interval_months" value="${esc(row.interval_months)}"><span>${esc(this.t("months"))}</span></span></div>`
-        : "";
-      return `<label class="field f-freq"><span class="sr">${esc(this.t("frequency"))}</span><select data-list="fixed_costs" data-id="${row._id}" data-field="interval_select">${options}<option value="custom" ${row._custom ? "selected" : ""}>${esc(this.t("freq_custom"))}</option></select></label>${custom}`;
+      if (row._custom)
+        return `<label class="field f-freq"><span class="sr">${esc(this.t("interval_label"))}</span><span class="money"><input type="text" inputmode="numeric" autocomplete="off" maxlength="3" data-list="fixed_costs" data-id="${row._id}" data-field="interval_months" value="${esc(row.interval_months)}"><span class="cur" aria-hidden="true">${esc(this.t("months"))}</span></span></label>`;
+      const options = INTERVALS.map((n) => `<option value="${n}" ${String(n) === String(row.interval_months) ? "selected" : ""}>${esc(this._freq(n))}</option>`).join("");
+      return `<label class="field f-freq"><span class="sr">${esc(this.t("frequency"))}</span><select data-list="fixed_costs" data-id="${row._id}" data-field="interval_select">${options}<option value="custom">${esc(this.t("freq_custom"))}</option></select></label>`;
     };
     const remove = (list, row) =>
       `<button class="icon-btn remove" data-action="remove" data-list="${list}" data-id="${row._id}" title="${esc(this.t("remove"))}" aria-label="${esc(this.t("remove"))}"><ha-icon icon="mdi:delete-outline"></ha-icon></button>`;
@@ -1417,9 +1420,6 @@ const STYLE = `
   .erow.special .f-name { grid-area: name; } .erow.special .f-gross { grid-area: gross; } .erow.special .remove { grid-area: remove; }
   .name-row { display: flex; align-items: center; gap: 8px; }
   .field.f-color input { width: 48px; padding: 4px; cursor: pointer; }
-  /* own interval ("every N months"): below the row on narrow cards, below the frequency on wide ones */
-  .interval { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--primary-text-color); }
-  .field .interval input { width: 64px; text-align: right; }
   .erow.shared { grid-template-columns: minmax(0, 1fr) 110px 40px; grid-template-areas: "name name remove" "to amount amount"; }
   .erow.shared .f-name { grid-area: name; } .erow.shared .f-to { grid-area: to; }
   .erow.shared .f-amount { grid-area: amount; } .erow.shared .remove { grid-area: remove; }
@@ -1427,7 +1427,7 @@ const STYLE = `
   .field input, .field select { font: inherit; font-size: 14px; color: var(--primary-text-color); height: 40px; box-sizing: border-box; min-width: 0;
     padding: 0 10px; border-radius: 8px; border: 1px solid var(--divider-color); background: var(--ha-card-background, var(--card-background-color)); }
   .field input:focus, .field select:focus { outline: 2px solid var(--primary-color); outline-offset: -1px; }
-  .field.f-amount input { text-align: right; font-variant-numeric: tabular-nums; }
+  .field.f-amount input, .field.f-freq input { text-align: right; font-variant-numeric: tabular-nums; }
   .field input.invalid { background: color-mix(in srgb, var(--error-color, #db4437) 18%, transparent); border-color: var(--error-color, #db4437); }
   .remove { width: 40px; height: 40px; }
   .toggle-space { width: 44px; flex-shrink: 0; }
@@ -1455,7 +1455,6 @@ const STYLE = `
   .erow.tabrow.flow .field.f-amount { flex: 0 1 88px; order: 1; }
   .erow.tabrow.flow .field.f-freq { flex: 0 1 104px; order: 2; }
   .erow.tabrow.flow .remove { order: 3; width: 32px; }
-  .erow.tabrow.flow .field.f-interval { flex: 1 1 100%; order: 4; }
   .erow.tabrow.flow .field.f-person { flex: 1 1 100%; order: 5; }
   .money { display: flex; align-items: center; height: 40px; box-sizing: border-box; border-radius: 8px;
     border: 1px solid var(--divider-color); background: var(--ha-card-background, var(--card-background-color)); }
@@ -1506,7 +1505,6 @@ const STYLE = `
     .erow.tabrow { grid-template-columns: minmax(0, 1fr) 130px 160px 140px 40px; grid-template-areas: "name amount freq person remove"; }
     .erow.tabrow.single { grid-template-columns: minmax(0, 1fr) 130px 160px 40px; grid-template-areas: "name amount freq remove"; }
     .erow.tabrow .f-name { grid-area: name; } .erow.tabrow .f-amount { grid-area: amount; } .erow.tabrow .f-freq { grid-area: freq; }
-    .erow.tabrow .f-interval { grid-column: 3; }
     .erow.tabrow .f-person { grid-area: person; } .erow.tabrow .remove { grid-area: remove; width: 40px; }
     .ehead.tabrow { padding-bottom: 0; }
     .erow.income { grid-template-columns: minmax(0, 1fr) 150px 150px 40px; grid-template-areas: "name gross amount remove"; }

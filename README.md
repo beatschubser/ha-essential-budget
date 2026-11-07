@@ -6,17 +6,17 @@ A static household budget for Home Assistant, for one or two persons: monthly ne
 
 ## Features
 
-- **Key figures:** monthly net income, fixed costs (with their share of the income) and the budget after fixed costs, per month (green when positive, red when negative)
+- **Key figures:** monthly net income, fixed costs (with their share of the income) and the free budget after fixed costs, per month (green when positive, red when negative)
 - **One or two persons:** leave the name of the second person empty for a budget of one person; each person can get an own color
 - **Income:** any number of monthly income items per person with gross (optional) and net, plus joint income such as child benefit (each assigned to the account of one person)
 - **Special payments:** once a year (bonus, Christmas bonus) with their gross; they count for the annual gross, not for the monthly income
 - **Fixed costs:** free categories, paid by one of the persons, paid monthly, quarterly, yearly or every N months. All costs are converted to a monthly value (a yearly payment counts with one twelfth)
 - **Categories** sorted by size with share and bar; expand a category to see its items, or open it for all details (amount per payment, per month, per year)
-- **Budget per person** (with two persons): own income + joint income received by the person − fixed costs paid by the person; negative values are shown in red
+- **Free budget per person** (with two persons): own income + joint income received by the person − fixed costs paid by the person; negative values are shown in red
 - **Annual gross** in its own box, per person: 12 × the monthly gross of the income + the gross of the special payments
 - **Own edit page:** income and fixed costs are edited on their own page, the card on the dashboard only shows the budget (administrators only, no sidebar entry)
 - **Privacy mode** (optional): all numbers are blurred until you tap one of the key figures; they are hidden again after a set time (default 30 seconds), when the app or browser tab goes to the background and when you tap again
-- Desktop layout on wide cards (income, annual gross and budget per person on the left, fixed costs on the right), one column on phones; follows the colors of your theme
+- Desktop layout on wide cards (income, annual gross and free budget per person on the left, fixed costs on the right), one column on phones; follows the colors of your theme
 - English and German; amounts stored with cents and shown in whole units of the currency set in Home Assistant (Settings > System > General)
 
 ## Installation

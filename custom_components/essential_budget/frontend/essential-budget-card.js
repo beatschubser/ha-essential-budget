@@ -35,8 +35,8 @@ const TEXTS = {
     income: "Monthly net",
     all_income: "all income",
     fixed_costs: "Fixed costs",
-    budget: "Budget",
-    budget_per_person: "Budget per person",
+    budget: "Free budget",
+    budget_per_person: "Free budget per person",
     annual_gross: "Annual gross",
     per_month: "per month",
     per_year: "per year",
@@ -107,21 +107,20 @@ const TEXTS = {
     save: "Save budget",
     saved: "Saved",
     title_optional: "Title (optional)",
-    privacy: "Privacy mode (numbers blurred until a key figure is tapped)",
+    privacy: "Privacy mode (tap the numbers to show them)",
     privacy_seconds: "Hide numbers again after (seconds)",
     show_numbers: "Show numbers",
     hide_numbers: "Hide numbers",
     saving: "Saving …",
     invalid: "Please check the marked fields.",
     save_failed: "Saving failed",
-    file_hint: "Saved in {file} in the config folder.",
   },
   de: {
     income: "Monatsnetto",
     all_income: "alle Einnahmen",
     fixed_costs: "Fixkosten",
-    budget: "Budget",
-    budget_per_person: "Budget je Person",
+    budget: "Freies Budget",
+    budget_per_person: "Freies Budget je Person",
     annual_gross: "Jahresbrutto",
     per_month: "pro Monat",
     per_year: "pro Jahr",
@@ -192,14 +191,13 @@ const TEXTS = {
     save: "Budget speichern",
     saved: "Gespeichert",
     title_optional: "Titel (optional)",
-    privacy: "Privatsphäremodus (Zahlen verschwommen, bis eine Kennzahl angetippt wird)",
+    privacy: "Privatsphäremodus (Zahlen antippen zum Anzeigen)",
     privacy_seconds: "Zahlen wieder verbergen nach (Sekunden)",
     show_numbers: "Zahlen anzeigen",
     hide_numbers: "Zahlen verbergen",
     saving: "Speichert …",
     invalid: "Bitte die markierten Felder prüfen.",
     save_failed: "Speichern fehlgeschlagen",
-    file_hint: "Gespeichert in {file} im config-Ordner.",
   },
 };
 
@@ -902,10 +900,6 @@ class EssentialBudgetCard extends HTMLElement {
     this._root.lang = this._lang;
     this._root.classList.toggle("private", !!this._config.privacy && !this._revealed && !this._draft);
     this._root.innerHTML = update + body;
-    // keep the active category tab visible in a scrolled tab bar
-    const tabs = this._root.querySelector(".tabs");
-    const activeTab = tabs?.querySelector(".tab.active, .tab-rename");
-    if (activeTab) tabs.scrollLeft = Math.max(0, activeTab.offsetLeft - tabs.offsetLeft - 16);
   }
 
   _header() {
@@ -1040,9 +1034,10 @@ class EssentialBudgetCard extends HTMLElement {
       ).join("")}</select></label>`;
     // monthly, quarterly, yearly or any other number of months: then the select becomes a field "N Monate"
     const freqSelect = (row) => {
+      const options = INTERVALS.map((n) => `<option value="${n}" ${!row._custom && String(n) === String(row.interval_months) ? "selected" : ""}>${esc(this._freq(n))}</option>`).join("");
       if (row._custom)
-        return `<label class="field f-freq"><span class="sr">${esc(this.t("interval_label"))}</span><span class="money"><input type="text" inputmode="numeric" autocomplete="off" maxlength="3" data-list="fixed_costs" data-id="${row._id}" data-field="interval_months" value="${esc(row.interval_months)}"><span class="cur" aria-hidden="true">${esc(this.t("months"))}</span></span></label>`;
-      const options = INTERVALS.map((n) => `<option value="${n}" ${String(n) === String(row.interval_months) ? "selected" : ""}>${esc(this._freq(n))}</option>`).join("");
+        // the field "N Monate" keeps a small menu to go back to monthly, quarterly or yearly
+        return `<div class="field f-freq"><span class="money"><input type="text" inputmode="numeric" autocomplete="off" maxlength="3" aria-label="${esc(this.t("interval_label"))}" data-list="fixed_costs" data-id="${row._id}" data-field="interval_months" value="${esc(row.interval_months)}"><span class="cur" aria-hidden="true">${esc(this.t("months"))}</span><span class="freq-menu"><ha-icon icon="mdi:chevron-down"></ha-icon><select aria-label="${esc(this.t("frequency"))}" data-list="fixed_costs" data-id="${row._id}" data-field="interval_select">${options}<option value="custom" selected>${esc(this.t("freq_custom"))}</option></select></span></span></div>`;
       return `<label class="field f-freq"><span class="sr">${esc(this.t("frequency"))}</span><select data-list="fixed_costs" data-id="${row._id}" data-field="interval_select">${options}<option value="custom">${esc(this.t("freq_custom"))}</option></select></label>`;
     };
     const remove = (list, row) =>
@@ -1116,15 +1111,15 @@ class EssentialBudgetCard extends HTMLElement {
           .join("")}
         ${add("shared_income", this.t("add_shared"))}</div>`;
 
-    const tabs = `<div class="tabs" role="tablist" aria-label="${esc(this.t("categories"))}">${categories
+    const tabs = `<div class="tabs"><div class="tab-list" role="tablist" aria-label="${esc(this.t("categories"))}">${categories
       .map((c) =>
         c === tab && this._renaming
           ? `<input class="tab-rename" type="text" data-list="cat-rename" data-field="name" value="${esc(c)}" placeholder="${esc(this.t("category"))}" aria-label="${esc(this.t("rename_category"))}">`
           : `<button class="tab ${c === tab ? "active" : ""}" role="tab" aria-selected="${c === tab}" data-action="tab" data-key="${esc(c)}">${esc(catLabel(c))}</button>`
       )
-      .join("")}
-      ${categories.length ? `<button class="icon-btn small-btn" data-action="rename" title="${esc(this.t("rename_category"))}" aria-label="${esc(this.t("rename_category"))}"><ha-icon icon="mdi:pencil"></ha-icon></button>` : ""}
-      <button class="tab new" data-action="newcat"><ha-icon icon="mdi:plus"></ha-icon>${esc(this.t("new_category"))}</button></div>`;
+      .join("")}</div>
+      <div class="tab-actions">${categories.length ? `<button class="icon-btn small-btn" data-action="rename" title="${esc(this.t("rename_category"))}" aria-label="${esc(this.t("rename_category"))}"><ha-icon icon="mdi:pencil"></ha-icon></button>` : ""}
+      <button class="tab new" data-action="newcat"><ha-icon icon="mdi:plus"></ha-icon>${esc(this.t("new_category"))}</button></div></div>`;
     const tabRows = d.fixed_costs.filter((r) => r.category.trim() === tab);
     const costs = `<div class="box">${this._section("mdi:receipt-text-outline", this.t("fixed_costs"))}
       ${tabs}
@@ -1140,7 +1135,7 @@ class EssentialBudgetCard extends HTMLElement {
     const footer = `<div class="box footer">
       <div class="save-error" ${this._saveError ? "" : "hidden"}>${esc(this._saveError || "")}</div>
       ${saved && !this._saveError ? `<div class="saved"><ha-icon icon="mdi:check-circle"></ha-icon>${esc(this.t("saved"))}</div>` : ""}
-      <span class="hint grow">${esc(this.t("file_hint", { file: this._file || "essential_budget.json" }))}</span>
+      <span class="grow"></span>
       <button class="btn" data-action="cancel" ${this._saving ? "disabled" : ""}>${esc(this.t("cancel"))}</button>
       <button class="btn primary" data-action="save" ${this._saving ? "disabled" : ""}>${esc(this.t(this._saving ? "saving" : "save"))}</button>
     </div>`;
@@ -1242,7 +1237,7 @@ class EssentialBudgetCardEditor extends HTMLElement {
       if (this._hass.user?.is_admin) {
         const link = document.createElement("div");
         link.className = "eb-edit-link";
-        link.style.cssText = "display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin-top:16px;color:var(--secondary-text-color);font-size:14px;";
+        link.style.cssText = "display:flex;flex-direction:column;align-items:flex-start;gap:16px;margin-top:24px;color:var(--secondary-text-color);font-size:14px;";
         link.innerHTML = `<span>${esc(texts.edit_link_hint)}</span>
           <button type="button" style="display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 16px 0 12px;border-radius:20px;cursor:pointer;font:inherit;font-weight:500;border:1px solid var(--primary-color);background:transparent;color:var(--primary-color);"><ha-icon icon="mdi:pencil" style="--mdc-icon-size:18px"></ha-icon>${esc(texts.edit_title)}</button>`;
         link.querySelector("button").addEventListener("click", () => openEditPage(this));
@@ -1363,7 +1358,7 @@ const STYLE = `
   .cat-btn { flex: 1; min-width: 0; min-height: 44px; border: 0; background: transparent; border-radius: 10px; cursor: pointer;
     display: flex; align-items: center; gap: 10px; padding: 0 2px; text-align: left; }
   .cat-btn:hover { background: color-mix(in srgb, var(--primary-text-color) 4%, transparent); }
-  .cat-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; padding: 6px 0; font-size: 14px; }
+  .cat-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 0 14px; font-size: 14px; }
   .cat-share { width: 34px; text-align: right; font-size: 11px; color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
   .cat-value { width: 66px; text-align: right; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .bar { display: block; height: 4px; border-radius: 2px; overflow: hidden; background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
@@ -1438,7 +1433,11 @@ const STYLE = `
   .edit-tab { display: inline-flex; align-items: center; gap: 8px; }
   .edit-tab.add-person { color: var(--primary-color); font-weight: 500; }
   .edit-tab.add-person ha-icon { --mdc-icon-size: 18px; }
-  .tabs { display: flex; gap: 8px; align-items: center; overflow-x: auto; padding: 2px 2px 12px; scrollbar-width: thin; }
+  /* category tabs wrap into more lines; rename and "+ Kategorie" stay at the top right */
+  .tabs { display: flex; gap: 8px; align-items: flex-start; padding: 2px 2px 12px; }
+  .tab-list { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .tab-actions { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+  .tab-list .tab, .tab-list .tab-rename { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .tab { flex-shrink: 0; height: 36px; padding: 0 14px; border-radius: 18px; cursor: pointer; white-space: nowrap;
     border: 1px solid var(--divider-color); background: transparent; font-size: 14px; font-weight: 500; }
   .tab.active { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
@@ -1462,6 +1461,11 @@ const STYLE = `
   .field .money input { flex: 1; width: 100%; height: 38px; border: 0; background: transparent; padding-right: 4px; }
   .field .money input:focus { outline: none; }
   .money .cur { padding: 0 10px 0 2px; font-size: 14px; color: var(--secondary-text-color); user-select: none; }
+  /* menu next to "N Monate": an invisible select over the chevron opens the native list */
+  .freq-menu { position: relative; display: flex; align-items: center; justify-content: center; width: 28px; height: 38px; margin-left: -6px;
+    color: var(--secondary-text-color); flex-shrink: 0; }
+  .freq-menu ha-icon { --mdc-icon-size: 20px; }
+  .field .freq-menu select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; padding: 0; border: 0; }
   .money:has(input.invalid) { background: color-mix(in srgb, var(--error-color, #db4437) 18%, transparent); border-color: var(--error-color, #db4437); }
   .field .money input.invalid { background: transparent; }
   /* narrow cards: name and delete on top, the other fields side by side as far as they fit */

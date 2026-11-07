@@ -19,7 +19,7 @@ BUDGET = {
     "persons": {"a": "Alex", "b": "Sam"},
     "income": [{"name": "Salary", "person": "a", "amount": 3150}],
     "shared_income": [{"name": "Child benefit", "to": "b", "amount": 255}],
-    "fixed_costs": [{"name": "Rent", "category": "Home", "person": "a", "amount": 1480, "payments_per_year": 12}],
+    "fixed_costs": [{"name": "Rent", "category": "Home", "person": "a", "amount": 1480, "interval_months": 1}],
 }
 
 
@@ -85,11 +85,11 @@ async def test_file_created_and_saved(hass: HomeAssistant, hass_ws_client) -> No
     assert result["file"] == DATA_FILE
 
     # invalid data is rejected and the file stays unchanged
-    bad = {**BUDGET, "fixed_costs": [{"name": "X", "person": "a", "amount": 1, "payments_per_year": 0}]}
+    bad = {**BUDGET, "fixed_costs": [{"name": "X", "person": "a", "amount": 1, "interval_months": 0}]}
     await client.send_json_auto_id({"type": f"{DOMAIN}/save", "data": bad})
     result = await client.receive_json()
     assert not result["success"]
-    assert "payments_per_year" in result["error"]["message"]
+    assert "interval_months" in result["error"]["message"]
     assert json.loads(data_file(hass).read_text(encoding="utf-8")) == saved
 
 

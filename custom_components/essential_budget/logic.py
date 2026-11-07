@@ -5,23 +5,26 @@ File format (.storage/essential_budget.json), amounts in the currency of Home As
 {
   "version": 1,
   "persons": {"a": "Alex", "b": "Sam"},   (an empty name for "b" = budget of one person)
+  "colors": {"a": "#2f6fde"},              (optional color per person)
   "income": [{"name": "Salary", "person": "a", "gross": 4800.0, "amount": 3150.0}],
-  "special_payments": [{"name": "Christmas bonus", "person": "a", "gross": 3400.0, "amount": 1900.0}],
+  "special_payments": [{"name": "Christmas bonus", "person": "a", "gross": 3400.0}],
   "shared_income": [{"name": "Child benefit", "to": "a", "amount": 518.0}],
-  "fixed_costs": [{"name": "Rent", "category": "Home", "person": "a", "amount": 1480.0, "payments_per_year": 12}]
+  "fixed_costs": [{"name": "Rent", "category": "Home", "person": "a", "amount": 1480.0, "interval_months": 1}]
 }
 
 - income: monthly income of one person, "amount" = net, "gross" = gross (optional)
-- special_payments: once a year (bonus, Christmas bonus), "gross" (optional) and "amount" = net; not part of
-  the monthly income, only of the annual gross
+- special_payments: once a year (bonus, Christmas bonus), only "gross"; not part of the monthly income,
+  only of the annual gross
 - annual gross of a person = 12 × gross of the income + gross of the special payments
 - shared_income: income of both (e.g. child benefit); "to" = the person whose account receives it
-- fixed_costs: amount per payment, paid "payments_per_year" times a year (1 to 12); "person" pays it
+- fixed_costs: amount per payment, paid every "interval_months" months (1 = monthly, 3 = quarterly,
+  12 = yearly, up to 120); "person" pays it. Files of 0.2.0 betas have "payments_per_year" instead (converted).
 """
 
 from __future__ import annotations
 
 import math
+import re
 from typing import Any
 
 FILE_VERSION = 1
@@ -33,13 +36,15 @@ MAX_NAME = 80
 MAX_CATEGORY = 40
 MAX_PERSON_NAME = 40
 MAX_AMOUNT = 100_000_000
+MAX_INTERVAL = 120  # months between two payments of a fixed cost
+COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 # Fields of every list, in the order they are written to the file
 LISTS = {
     "income": ("name", "person", "gross", "amount"),
-    "special_payments": ("name", "person", "gross", "amount"),
+    "special_payments": ("name", "person", "gross"),
     "shared_income": ("name", "to", "amount"),
-    "fixed_costs": ("name", "category", "person", "amount", "payments_per_year"),
+    "fixed_costs": ("name", "category", "person", "amount", "interval_months"),
 }
 
 
@@ -87,9 +92,9 @@ def _person(value: Any, where: str, persons: tuple[str, ...]) -> str:
     return value
 
 
-def _payments(value: Any, where: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != int(value) or not 1 <= value <= 12:
-        raise BudgetError(f"{where}: whole number from 1 to 12 expected")
+def _interval(value: Any, where: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != int(value) or not 1 <= value <= MAX_INTERVAL:
+        raise BudgetError(f"{where}: whole number from 1 to {MAX_INTERVAL} expected")
     return int(value)
 
 
@@ -100,7 +105,7 @@ def _item(list_key: str, raw: Any, index: int, persons: tuple[str, ...]) -> dict
         raise BudgetError(f"{where}: object expected")
     name = _text(raw.get("name"), f"{where}: name", MAX_NAME)
     amount = raw.get("amount")
-    if not name and amount in (None, "", 0) and raw.get("gross") in (None, "", 0):
+    if not name and amount in (None, "", 0) and raw.get("gross") in (None, "", 0):  # empty row
         return None
     if not name:
         raise BudgetError(f"{where}: name missing")
@@ -108,7 +113,9 @@ def _item(list_key: str, raw: Any, index: int, persons: tuple[str, ...]) -> dict
     for field in LISTS[list_key][1:]:
         value = raw.get(field)
         if field == "gross":
-            if value not in (None, ""):  # optional: only written when set
+            if list_key == "special_payments":  # the only amount of a special payment
+                item[field] = _amount(0 if value in (None, "") else value, f"{where}: gross")
+            elif value not in (None, ""):  # optional for income: only written when set
                 item[field] = _amount(value, f"{where}: gross")
         elif field == "amount":
             item[field] = _amount(0 if value in (None, "") else value, f"{where}: amount")
@@ -116,8 +123,14 @@ def _item(list_key: str, raw: Any, index: int, persons: tuple[str, ...]) -> dict
             item[field] = _person(value, f"{where}: {field}", persons)
         elif field == "category":
             item[field] = _text(value, f"{where}: category", MAX_CATEGORY)
-        elif field == "payments_per_year":
-            item[field] = _payments(12 if value is None else value, f"{where}: payments_per_year")
+        elif field == "interval_months":
+            if value is None and raw.get("payments_per_year") is not None:
+                # 0.2.0 betas stored payments per year (12 = monthly, 1 = yearly)
+                payments = raw["payments_per_year"]
+                if isinstance(payments, bool) or not isinstance(payments, (int, float)) or not 1 <= payments <= 12:
+                    raise BudgetError(f"{where}: payments_per_year: number from 1 to 12 expected")
+                value = round(12 / payments)
+            item[field] = _interval(1 if value is None else value, f"{where}: interval_months")
     return item
 
 
@@ -139,6 +152,19 @@ def validate(data: Any) -> dict[str, Any]:
         "b": _text(persons_raw.get("b"), "persons: b", MAX_PERSON_NAME),
     }
     result: dict[str, Any] = {"version": FILE_VERSION, "persons": persons}
+    colors_raw = data.get("colors") or {}
+    if not isinstance(colors_raw, dict):
+        raise BudgetError("colors: object expected")
+    colors = {}
+    for p in PERSONS:
+        color = colors_raw.get(p)
+        if color in (None, ""):
+            continue
+        if not isinstance(color, str) or not COLOR.match(color):
+            raise BudgetError(f"colors: {p}: color like #2f6fde expected")
+        colors[p] = color.lower()
+    if colors:  # optional, only written when set
+        result["colors"] = colors
     active = active_persons(result)
     for key in LISTS:
         raw_list = data.get(key)
@@ -154,7 +180,7 @@ def validate(data: Any) -> dict[str, Any]:
 
 def monthly(cost: dict[str, Any]) -> float:
     """Monthly share of a fixed cost (yearly costs count with a twelfth)."""
-    return cost["amount"] * cost["payments_per_year"] / 12
+    return cost["amount"] / cost["interval_months"]
 
 
 def totals(data: dict[str, Any]) -> dict[str, Any]:

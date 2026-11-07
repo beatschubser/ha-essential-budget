@@ -1,7 +1,7 @@
 """Constants for the Essential Budget integration."""
 
 DOMAIN = "essential_budget"
-VERSION = "0.1.0-beta.3"
+VERSION = "0.1.0-beta.4"
 
 # All budget data lives in one readable JSON file in the Home Assistant config folder.
 # It is read at startup; manual changes are picked up after a restart.

@@ -1,8 +1,10 @@
 /* Essential Budget card for Home Assistant (loaded automatically by the integration).
  *
- * - EssentialBudgetCard shows the budget. In the preview of the dashboard card editor it opens in
- *   edit mode; the budget is then saved with its own button to /config/essential_budget.json.
- * - EssentialBudgetCardEditor is the visual card editor (only the title; grid options are kept).
+ * - EssentialBudgetCard shows the budget. On the edit page it runs in edit mode; the budget is then
+ *   saved with its own button to /config/.storage/essential_budget.json.
+ * - EssentialBudgetPanel is the edit page (/essential-budget, admins only, no sidebar entry). It is
+ *   linked from the card editor and from the "Configure" button of the integration.
+ * - EssentialBudgetCardEditor is the visual card editor (title and privacy mode; grid options are kept).
  *
  * All amounts are stored with cents and shown rounded to whole units of the currency set in
  * Home Assistant (Settings > System > General).
@@ -22,6 +24,7 @@ const AMOUNT_FIELDS = ["amount", "gross"]; // text fields in the edit mode that 
 const FALLBACK_CURRENCY = "EUR"; // if Home Assistant has no currency set
 const SAVED_NOTE_MS = 4000; // how long "Saved" is shown in the edit mode
 const DEFAULT_PRIVACY_SECONDS = 30; // privacy mode: numbers are hidden again after this time
+const PANEL_PATH = "/essential-budget"; // edit page, registered by the integration (const.PANEL_URL_PATH)
 
 /* ---------------------------------------------------------------------
  * Texts (English is the fallback)
@@ -53,7 +56,7 @@ const TEXTS = {
     open_details: "{c}: show details",
     back: "Back to overview",
     empty: "No entries yet.",
-    empty_admin: "No entries yet. Edit this card in the dashboard editor to enter your budget.",
+    empty_admin: "No entries yet.",
     error: "The budget could not be loaded",
     not_set_up: "Essential Budget is not set up yet (Settings > Devices & services).",
     update_available: "Essential Budget was updated. Tap to reload the page.",
@@ -66,6 +69,8 @@ const TEXTS = {
     color: "Color",
     reset_color: "Default color",
     edit_title: "Edit budget",
+    edit_link_hint: "Income and fixed costs are edited on their own page.",
+    back_page: "Back",
     persons: "Persons",
     person_name: "Name",
     person_n: "Person {n}",
@@ -102,7 +107,6 @@ const TEXTS = {
     cancel: "Discard changes",
     save: "Save budget",
     saved: "Saved",
-    editor_hint: "Save the budget with the button below. The save button of this dialog only saves the card options.",
     title_optional: "Title (optional)",
     privacy: "Privacy mode (numbers blurred until a key figure is tapped)",
     privacy_seconds: "Hide numbers again after (seconds)",
@@ -138,7 +142,7 @@ const TEXTS = {
     open_details: "{c}: Details öffnen",
     back: "Zurück zur Übersicht",
     empty: "Noch keine Einträge.",
-    empty_admin: "Noch keine Einträge. Bearbeite die Karte im Dashboard-Editor, um dein Budget zu erfassen.",
+    empty_admin: "Noch keine Einträge.",
     error: "Das Budget konnte nicht geladen werden",
     not_set_up: "Essential Budget ist noch nicht eingerichtet (Einstellungen > Geräte & Dienste).",
     update_available: "Essential Budget wurde aktualisiert. Tippen, um die Seite neu zu laden.",
@@ -151,6 +155,8 @@ const TEXTS = {
     color: "Farbe",
     reset_color: "Standardfarbe",
     edit_title: "Budget bearbeiten",
+    edit_link_hint: "Einnahmen und Fixkosten bearbeitest du auf einer eigenen Seite.",
+    back_page: "Zurück",
     persons: "Personen",
     person_name: "Name",
     person_n: "Person {n}",
@@ -187,7 +193,6 @@ const TEXTS = {
     cancel: "Änderungen verwerfen",
     save: "Budget speichern",
     saved: "Gespeichert",
-    editor_hint: "Das Budget speicherst du mit dem Button unten. Der Speichern-Button dieses Dialogs speichert nur die Kartenoptionen.",
     title_optional: "Titel (optional)",
     privacy: "Privatsphäremodus (Zahlen verschwommen, bis eine Kennzahl angetippt wird)",
     privacy_seconds: "Zahlen wieder verbergen nach (Sekunden)",
@@ -268,16 +273,28 @@ const parseAmount = (text) => {
   return Number.isFinite(value) ? value : null;
 };
 
-/**
- * True if the card is shown in the preview of the card editor dialog (searched across shadow roots).
- * The "preview" property of cards is not used for this: Home Assistant also sets it for every card
- * while the dashboard itself is in edit mode.
- */
-const inCardEditor = (el) => {
+/** The nearest ancestor with the given tag name, searched across shadow roots. */
+const findAncestor = (el, tagName) => {
   for (let n = el; n; n = n.parentNode || n.host) {
-    if (n.tagName === "HUI-DIALOG-EDIT-CARD") return true;
+    if (n.tagName === tagName) return n;
   }
-  return false;
+  return null;
+};
+
+/** Opens a page of Home Assistant without reloading (like a link in the frontend). */
+const navigate = (path) => {
+  history.pushState(null, "", path);
+  window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+};
+
+/**
+ * Opens the edit page. From the card editor the dialog is closed first; if it keeps open
+ * (unsaved card options, Home Assistant asks), nothing happens.
+ */
+const openEditPage = (from) => {
+  const dialog = findAncestor(from, "HUI-DIALOG-EDIT-CARD");
+  if (dialog?.closeDialog?.() === false) return;
+  navigate(PANEL_PATH);
 };
 
 /** Negative if version a is older than b. "0.2.0-beta.1" is older than "0.2.0". */
@@ -401,28 +418,21 @@ class EssentialBudgetCard extends HTMLElement {
     if (this._hass) this._render();
   }
 
-  /** Set by Home Assistant in the card editor and while the dashboard is edited: only a reason to check again. */
-  set preview(value) {
-    this._preview = !!value;
+  /** Set by the edit page: the card then always runs in edit mode (dashboards only show the budget). */
+  set editPage(value) {
+    this._editPage = !!value;
     this._syncEdit();
   }
 
-  /** Starts the edit mode in the card editor preview; true if it did. */
+  /** Starts the edit mode on the edit page; true if it did. */
   _autoEdit() {
-    if (this._draft || !this._data || !this._isAdmin || !inCardEditor(this)) return false;
+    if (this._draft || !this._data || !this._isAdmin || !this._editPage) return false;
     this._startEdit();
     return true;
   }
 
-  /** Edit mode only inside the card editor dialog: start it there, leave it (discarding) anywhere else. */
   _syncEdit() {
-    if (this._autoEdit()) {
-      this._render();
-    } else if (this._draft && !inCardEditor(this)) {
-      this._draft = null;
-      this._saveError = null;
-      this._load(); // show the current budget, it may have been saved in the card editor meanwhile
-    }
+    if (this._autoEdit()) this._render();
   }
 
   set hass(hass) {
@@ -580,6 +590,9 @@ class EssentialBudgetCard extends HTMLElement {
     if (!el) return;
     const { action, key, list, id } = el.dataset;
     switch (action) {
+      case "openedit":
+        openEditPage(this);
+        return;
       case "reload":
         sessionSet(`eb-reloaded-${this._update.version}`, "1");
         location.reload();
@@ -597,7 +610,7 @@ class EssentialBudgetCard extends HTMLElement {
         this._detail = null;
         break;
       case "cancel":
-        // discard: start again from the saved budget (in the card editor the edit mode stays open)
+        // discard: start again from the saved budget (the edit mode stays open)
         this._draft = null;
         this._saveError = null;
         this._autoEdit();
@@ -896,7 +909,10 @@ class EssentialBudgetCard extends HTMLElement {
   }
 
   _renderView(m) {
-    if (m.empty) return `${this._header()}<div class="box msg">${esc(this.t(this._isAdmin ? "empty_admin" : "empty"))}</div>`;
+    if (m.empty)
+      return `${this._header()}<div class="box msg">${esc(this.t(this._isAdmin ? "empty_admin" : "empty"))}${
+        this._isAdmin ? `<button class="add" data-action="openedit"><ha-icon icon="mdi:pencil"></ha-icon>${esc(this.t("edit_title"))}</button>` : ""
+      }</div>`;
     const negative = (v) => (v < 0 ? " negative" : "");
 
     // privacy mode: tapping a key figure shows/hides all numbers
@@ -1134,12 +1150,56 @@ class EssentialBudgetCard extends HTMLElement {
     const addPerson = personTabs.includes("b") ? "" : `<button class="edit-tab add-person" data-action="addperson"><ha-icon icon="mdi:plus"></ha-icon>${esc(this.t("person"))}</button>`;
     const editTabs = `<div class="edit-tabs" role="tablist">${personTabs.map(tabButton).join("")}${addPerson}${showShared ? tabButton("shared") : ""}${tabButton("costs")}</div>`;
     const section = current === "costs" ? costs : current === "shared" ? sharedSection : personSection(current);
-    return `<div class="header"><h1 class="title">${esc(this.t("edit_title"))}</h1></div><div class="hint flat">${esc(this.t("editor_hint"))}</div>${editTabs}${section}${footer}`;
+    // the title is shown by the edit page
+    return `${editTabs}${section}${footer}`;
   }
 }
 
 /* =====================================================================
- * Card editor (only the title; all other keys like grid_options are kept)
+ * Edit page (panel): toolbar with back button and title, the card in edit mode below
+ * ===================================================================== */
+
+class EssentialBudgetPanel extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" }).innerHTML = `<style>${PANEL_STYLE}</style>
+      <div class="toolbar">
+        <button class="back" data-action="back"><ha-icon icon="mdi:arrow-left"></ha-icon></button>
+        <h1 class="page-title"></h1>
+      </div>
+      <div class="content"><div class="page"></div></div>`;
+    this._card = document.createElement("essential-budget-card");
+    this._card.setConfig({});
+    this._card.editPage = true;
+    this.shadowRoot.querySelector(".page").append(this._card);
+    this.shadowRoot.querySelector(".back").addEventListener("click", () => {
+      // back to where the page was opened from (dashboard, integration), else to the start page
+      if (history.length > 1) history.back();
+      else navigate("/");
+    });
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._card.hass = hass;
+    const texts = TEXTS[pickLanguage(hass)];
+    const title = this.shadowRoot.querySelector(".page-title");
+    if (title.textContent !== texts.edit_title) {
+      title.textContent = texts.edit_title;
+      const back = this.shadowRoot.querySelector(".back");
+      back.title = texts.back_page;
+      back.setAttribute("aria-label", texts.back_page);
+    }
+  }
+
+  // set by Home Assistant, not needed
+  set narrow(value) {}
+  set route(value) {}
+  set panel(value) {}
+}
+
+/* =====================================================================
+ * Card editor (title and privacy mode; all other keys like grid_options are kept)
  * ===================================================================== */
 
 class EssentialBudgetCardEditor extends HTMLElement {
@@ -1172,6 +1232,16 @@ class EssentialBudgetCardEditor extends HTMLElement {
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
       });
       this.append(this._form);
+      // the budget itself is edited on its own page
+      if (this._hass.user?.is_admin) {
+        const link = document.createElement("div");
+        link.className = "eb-edit-link";
+        link.style.cssText = "display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin-top:16px;color:var(--secondary-text-color);font-size:14px;";
+        link.innerHTML = `<span>${esc(texts.edit_link_hint)}</span>
+          <button type="button" style="display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 16px 0 12px;border-radius:20px;cursor:pointer;font:inherit;font-weight:500;border:1px solid var(--primary-color);background:transparent;color:var(--primary-color);"><ha-icon icon="mdi:pencil" style="--mdc-icon-size:18px"></ha-icon>${esc(texts.edit_title)}</button>`;
+        link.querySelector("button").addEventListener("click", () => openEditPage(this));
+        this.append(link);
+      }
     }
     this._form.hass = this._hass;
     this._form.schema = [
@@ -1191,6 +1261,21 @@ class EssentialBudgetCardEditor extends HTMLElement {
 /* =====================================================================
  * Styles (colors come from the Home Assistant theme)
  * ===================================================================== */
+
+const PANEL_STYLE = `
+  :host { display: block; height: 100%; background: var(--primary-background-color); color: var(--primary-text-color); }
+  .toolbar { display: flex; align-items: center; gap: 4px; box-sizing: border-box; padding: var(--safe-area-inset-top, 0px) 12px 0 4px;
+    height: calc(var(--header-height, 56px) + var(--safe-area-inset-top, 0px));
+    background: var(--app-header-background-color, var(--primary-color)); color: var(--app-header-text-color, #fff);
+    border-bottom: var(--app-header-border-bottom, none); }
+  .back { width: 48px; height: 48px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; }
+  .back:hover { background: rgba(127, 127, 127, 0.15); }
+  .page-title { margin: 0 0 0 4px; font-size: 20px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .content { height: calc(100% - var(--header-height, 56px) - var(--safe-area-inset-top, 0px)); overflow-y: auto; box-sizing: border-box;
+    padding: 16px 16px calc(16px + var(--safe-area-inset-bottom, 0px)); }
+  .page { max-width: 1000px; margin: 0 auto; }
+`;
 
 const STYLE = `
   :host { display: block; }
@@ -1446,3 +1531,5 @@ if (!customElements.get("essential-budget-card")) {
   });
   console.info(`%c ESSENTIAL-BUDGET-CARD %c ${VERSION} `, "background:#1f7a5c;color:#fff", "");
 }
+// the edit page uses the card, so it is defined last
+if (!customElements.get("essential-budget-panel")) customElements.define("essential-budget-panel", EssentialBudgetPanel);

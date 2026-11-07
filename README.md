@@ -14,7 +14,7 @@ A static household budget for Home Assistant, for one or two persons: monthly ne
 - **Categories** sorted by size with share and bar; expand a category to see its items, or open it for all details (amount per payment, per month, per year)
 - **Budget per person** (with two persons): own income + joint income received by the person − fixed costs paid by the person; negative values are shown in red
 - **Annual gross** in its own box, per person: 12 × the monthly gross of the income + the gross of the special payments
-- **Editing in the card editor:** open the card in the dashboard editor and the preview shows the budget in edit mode (saved with its own button; administrators only)
+- **Own edit page:** income and fixed costs are edited on their own page, the card on the dashboard only shows the budget (administrators only, no sidebar entry)
 - **Privacy mode** (optional): all numbers are blurred until you tap one of the key figures; they are hidden again after a set time (default 30 seconds), when the app or browser tab goes to the background and when you tap again
 - Desktop layout on wide cards (income on the left, expenses on the right), one column on phones; follows the colors of your theme
 - English and German; amounts stored with cents and shown in whole units of the currency set in Home Assistant (Settings > System > General)
@@ -34,7 +34,13 @@ privacy: true          # optional: numbers blurred until a key figure is tapped
 privacy_seconds: 60    # optional: hide the numbers again after (default 30)
 ```
 
-To enter or change the budget, edit the dashboard and open the card: the preview on the right is in edit mode. Save the budget with **Save budget** below the entries; the save button of the dialog only saves the card options (title, privacy mode, size).
+To enter or change the budget, open the edit page in one of these ways:
+
+- **Settings > Devices & services > Essential Budget >** gear icon (**Configure**) next to the entry
+- in the dashboard editor, open the card and choose **Edit budget** below the card options
+- directly at `/essential-budget` (e.g. as a bookmark)
+
+Save the budget with **Save budget** below the entries. The page has no sidebar entry and is only available to administrators.
 
 ## Your data
 
@@ -57,7 +63,7 @@ Everything is stored in **`.storage/essential_budget.json`** in your Home Assist
 
 - `amount` of a fixed cost is the amount **per payment**, paid every `interval_months` months (1 = monthly, 3 = quarterly, 12 = yearly, up to 120)
 - `amount` of income is the net amount per month, `gross` is optional; special payments (once a year) only have `gross` and count toward the annual gross
-- `colors` is optional (person colors, set in the edit mode)
+- `colors` is optional (person colors, set on the edit page)
 - `"b": ""` means a budget of one person; then every entry belongs to person `a`
 - You can edit the file by hand (best while Home Assistant is stopped); the changes are read when Home Assistant starts. If the file cannot be read, the card shows an error, a repair notice appears and saving is blocked until the file is fixed, so it is never overwritten by accident
 - The file is part of every Home Assistant backup. Removing the integration keeps the file

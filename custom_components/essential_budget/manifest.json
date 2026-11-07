@@ -9,6 +9,7 @@
     "http",
     "frontend",
     "lovelace",
+    "panel_custom",
     "websocket_api"
   ],
   "documentation": "https://github.com/beatschubser/ha-essential-budget",

@@ -121,3 +121,13 @@ async def test_save_needs_admin(hass: HomeAssistant, hass_ws_client, hass_read_o
     await client.send_json_auto_id({"type": f"{DOMAIN}/save", "data": BUDGET})
     result = await client.receive_json()
     assert result["error"]["code"] == "unauthorized"
+
+
+async def test_edit_page_registered(hass: HomeAssistant) -> None:
+    """The edit page is registered for admins only and without a sidebar entry."""
+    await setup(hass)
+    panel = hass.data["frontend_panels"]["essential-budget"]
+    assert panel.require_admin
+    assert panel.sidebar_title is None
+    assert panel.config["_panel_custom"]["name"] == "essential-budget-panel"
+    assert panel.config_panel_domain == DOMAIN

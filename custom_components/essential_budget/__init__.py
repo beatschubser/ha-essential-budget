@@ -1,9 +1,9 @@
 """Essential Budget: a static household budget with a dashboard card.
 
 Setup overview:
-- async_setup (once): register the WebSocket commands and serve the card.
+- async_setup (once): register the WebSocket commands, serve the card and register the edit page.
 - async_setup_entry (one entry only): read /config/.storage/essential_budget.json (created if missing).
-  The data is edited in the card; manual changes to the file are read at the next start.
+  The data is edited on the edit page (/essential-budget); manual changes to the file are read at the next start.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register(hass)
     if hass.http is not None:
         await frontend_resource.async_register_view(hass)
+        await frontend_resource.async_register_panel(hass)
         async_at_started(hass, frontend_resource.async_register_card)
     return True
 

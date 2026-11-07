@@ -1,4 +1,4 @@
-"""Serve the card and register it as dashboard resource (like HACS does)."""
+"""Serve the card, register it as dashboard resource (like HACS does) and register the edit page."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
-from .const import CARD_URL, FRONTEND_URL, VERSION
+from .const import CARD_URL, DOMAIN, FRONTEND_URL, PANEL_ELEMENT, PANEL_URL_PATH, VERSION
 
 _LOGGER = logging.getLogger(__name__)
 FOLDER = Path(__file__).parent / "frontend"
@@ -47,6 +47,26 @@ def _list_files() -> dict[str, Path]:
 async def async_register_view(hass: HomeAssistant) -> None:
     files = await hass.async_add_executor_job(_list_files)
     hass.http.register_view(FrontendView(files))
+
+
+async def async_register_panel(hass: HomeAssistant) -> None:
+    """Own page for editing the budget, defined in the card file.
+
+    No sidebar entry (no title); reached from the card editor or with the "Configure" button
+    of the integration (config_panel_domain). Only administrators can open it.
+    """
+    from homeassistant.components import panel_custom
+
+    if PANEL_URL_PATH in hass.data.get("frontend_panels", {}):
+        return
+    await panel_custom.async_register_panel(
+        hass,
+        frontend_url_path=PANEL_URL_PATH,
+        webcomponent_name=PANEL_ELEMENT,
+        module_url=f"{CARD_URL}?v={VERSION}",
+        require_admin=True,
+        config_panel_domain=DOMAIN,
+    )
 
 
 def _resources(hass: HomeAssistant):

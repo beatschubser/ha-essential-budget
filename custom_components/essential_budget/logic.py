@@ -5,12 +5,16 @@ File format (.storage/essential_budget.json), amounts in the currency of Home As
 {
   "version": 1,
   "persons": {"a": "Alex", "b": "Sam"},   (an empty name for "b" = budget of one person)
-  "income": [{"name": "Salary", "person": "a", "amount": 3150.0, "annual_gross": 58000.0}],
+  "income": [{"name": "Salary", "person": "a", "gross": 4800.0, "amount": 3150.0}],
+  "special_payments": [{"name": "Christmas bonus", "person": "a", "gross": 3400.0, "amount": 1900.0}],
   "shared_income": [{"name": "Child benefit", "to": "a", "amount": 518.0}],
   "fixed_costs": [{"name": "Rent", "category": "Home", "person": "a", "amount": 1480.0, "payments_per_year": 12}]
 }
 
-- income: net income per month of one person; "annual_gross" (optional) is the yearly gross of this income
+- income: monthly income of one person, "amount" = net, "gross" = gross (optional)
+- special_payments: once a year (bonus, Christmas bonus), "gross" (optional) and "amount" = net; not part of
+  the monthly income, only of the annual gross
+- annual gross of a person = 12 × gross of the income + gross of the special payments
 - shared_income: income of both (e.g. child benefit); "to" = the person whose account receives it
 - fixed_costs: amount per payment, paid "payments_per_year" times a year (1 to 12); "person" pays it
 """
@@ -32,7 +36,8 @@ MAX_AMOUNT = 100_000_000
 
 # Fields of every list, in the order they are written to the file
 LISTS = {
-    "income": ("name", "person", "amount", "annual_gross"),
+    "income": ("name", "person", "gross", "amount"),
+    "special_payments": ("name", "person", "gross", "amount"),
     "shared_income": ("name", "to", "amount"),
     "fixed_costs": ("name", "category", "person", "amount", "payments_per_year"),
 }
@@ -95,16 +100,16 @@ def _item(list_key: str, raw: Any, index: int, persons: tuple[str, ...]) -> dict
         raise BudgetError(f"{where}: object expected")
     name = _text(raw.get("name"), f"{where}: name", MAX_NAME)
     amount = raw.get("amount")
-    if not name and amount in (None, "", 0):
+    if not name and amount in (None, "", 0) and raw.get("gross") in (None, "", 0):
         return None
     if not name:
         raise BudgetError(f"{where}: name missing")
     item: dict[str, Any] = {"name": name}
     for field in LISTS[list_key][1:]:
         value = raw.get(field)
-        if field == "annual_gross":
+        if field == "gross":
             if value not in (None, ""):  # optional: only written when set
-                item[field] = _amount(value, f"{where}: annual_gross")
+                item[field] = _amount(value, f"{where}: gross")
         elif field == "amount":
             item[field] = _amount(0 if value in (None, "") else value, f"{where}: amount")
         elif field in ("person", "to"):
@@ -160,8 +165,14 @@ def totals(data: dict[str, Any]) -> dict[str, Any]:
     costs = {p: sum(monthly(c) for c in data["fixed_costs"] if c["person"] == p) for p in persons}
     income_total = sum(income.values()) + sum(shared.values())
     costs_total = sum(costs.values())
+    annual_gross = {
+        p: sum(12 * i["gross"] for i in data["income"] if i["person"] == p and "gross" in i)
+        + sum(s["gross"] for s in data["special_payments"] if s["person"] == p and "gross" in s)
+        for p in persons
+    }
     return {
         "income": income_total,
+        "annual_gross_per_person": annual_gross,
         "fixed_costs": costs_total,
         "budget": income_total - costs_total,
         "budget_per_person": {p: income[p] + shared[p] - costs[p] for p in persons},

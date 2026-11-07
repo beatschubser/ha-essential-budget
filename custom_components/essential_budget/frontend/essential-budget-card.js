@@ -16,10 +16,11 @@ const PERSON_COLORS = { a: "#2f6fde", b: "#d9822b", shared: "#7a8794" };
 // Category colors, assigned in alphabetical order of the category names
 const PALETTE = ["#2f6fde", "#7c5cd6", "#d9822b", "#1f8f74", "#b0436e", "#0e7c99", "#8a6d1f", "#a23b3b", "#4b8b2f", "#5f6b78"];
 const FREQUENCIES = [12, 6, 4, 3, 2, 1]; // offered first in the edit mode; any value from 1 to 12 is valid
-const LISTS = ["income", "shared_income", "fixed_costs"];
-const AMOUNT_FIELDS = ["amount", "annual_gross"]; // text fields in the edit mode that hold amounts
+const LISTS = ["income", "special_payments", "shared_income", "fixed_costs"];
+const AMOUNT_FIELDS = ["amount", "gross"]; // text fields in the edit mode that hold amounts (gross is optional)
 const FALLBACK_CURRENCY = "EUR"; // if Home Assistant has no currency set
 const SAVED_NOTE_MS = 4000; // how long "Saved" is shown in the edit mode
+const DEFAULT_PRIVACY_SECONDS = 30; // privacy mode: numbers are hidden again after this time
 
 /* ---------------------------------------------------------------------
  * Texts (English is the fallback)
@@ -60,12 +61,22 @@ const TEXTS = {
     persons: "Persons",
     person_name: "Name",
     person_n: "Person {n}",
-    net_per_month: "Net per month",
+    income_edit: "Income",
+    special_payments: "Special payments",
+    special_hint: "Paid once a year; only part of the annual gross, not of the monthly income",
+    add_special: "Add special payment",
+    gross_month: "Gross per month",
+    net_month: "Net per month",
+    gross_month_short: "Gross/month",
+    net_month_short: "Net/month",
+    gross: "Gross",
+    net: "Net",
     categories: "Categories",
     new_category: "Category",
     new_category_name: "New category",
     rename_category: "Rename category",
-    gross_optional: "Annual gross (optional)",
+    net_short: "Net",
+    gross_short: "Gross",
     one_person_hint: "Leave the name empty for a budget of one person.",
     second_person_in_use: "The second person still has entries. Remove them or enter a name for the second person.",
     name_optional: "Name (optional)",
@@ -85,6 +96,10 @@ const TEXTS = {
     saved: "Saved",
     editor_hint: "Save the budget with the button below. The save button of this dialog only saves the card options.",
     title_optional: "Title (optional)",
+    privacy: "Privacy mode (numbers blurred until a key figure is tapped)",
+    privacy_seconds: "Hide numbers again after (seconds)",
+    show_numbers: "Show numbers",
+    hide_numbers: "Hide numbers",
     saving: "Saving …",
     invalid: "Please check the marked fields.",
     save_failed: "Saving failed",
@@ -124,12 +139,22 @@ const TEXTS = {
     persons: "Personen",
     person_name: "Name",
     person_n: "Person {n}",
-    net_per_month: "Netto pro Monat",
+    income_edit: "Einnahmen",
+    special_payments: "Sonderzahlungen",
+    special_hint: "Einmal im Jahr; zählt nur zum Jahresbrutto, nicht zu den monatlichen Einnahmen",
+    add_special: "Sonderzahlung hinzufügen",
+    gross_month: "Brutto pro Monat",
+    net_month: "Netto pro Monat",
+    gross_month_short: "Brutto/Monat",
+    net_month_short: "Netto/Monat",
+    gross: "Brutto",
+    net: "Netto",
     categories: "Kategorien",
     new_category: "Kategorie",
     new_category_name: "Neue Kategorie",
     rename_category: "Kategorie umbenennen",
-    gross_optional: "Jahresbrutto (optional)",
+    net_short: "Netto",
+    gross_short: "Brutto",
     one_person_hint: "Für das Budget einer einzelnen Person bleibt der Name leer.",
     second_person_in_use: "Die zweite Person hat noch Einträge. Entferne sie oder trag einen Namen für die zweite Person ein.",
     name_optional: "Name (optional)",
@@ -149,6 +174,10 @@ const TEXTS = {
     saved: "Gespeichert",
     editor_hint: "Das Budget speicherst du mit dem Button unten. Der Speichern-Button dieses Dialogs speichert nur die Kartenoptionen.",
     title_optional: "Titel (optional)",
+    privacy: "Privatsphäremodus (Zahlen verschwommen, bis eine Kennzahl angetippt wird)",
+    privacy_seconds: "Zahlen wieder verbergen nach (Sekunden)",
+    show_numbers: "Zahlen anzeigen",
+    hide_numbers: "Zahlen verbergen",
     saving: "Speichert …",
     invalid: "Bitte die markierten Felder prüfen.",
     save_failed: "Speichern fehlgeschlagen",
@@ -267,7 +296,20 @@ const buildModel = (data) => {
   const active = activePersons(data.persons);
   const people = active.map((p) => {
     const items = data.income.filter((i) => i.person === p);
-    return { key: p, name: data.persons[p], color: PERSON_COLORS[p], items, sum: sum(items.map((i) => i.amount)) };
+    // annual gross = 12 × monthly gross of the income + gross of the special payments (listed below the net income)
+    const grossItems = [
+      ...items.filter((i) => i.gross != null).map((i) => ({ name: i.name, value: i.gross * 12, monthly: i.gross })),
+      ...data.special_payments.filter((i) => i.person === p && i.gross != null).map((i) => ({ name: i.name, value: i.gross })),
+    ];
+    return {
+      key: p,
+      name: data.persons[p],
+      color: PERSON_COLORS[p],
+      items,
+      sum: sum(items.map((i) => i.amount)),
+      grossItems,
+      gross: sum(grossItems.map((i) => i.value)),
+    };
   });
   const sharedSum = sum(data.shared_income.map((i) => i.amount));
   const incomeTotal = sum(people.map((p) => p.sum)) + sharedSum;
@@ -281,15 +323,6 @@ const buildModel = (data) => {
       return { category, color: PALETTE[i % PALETTE.length], items, sum: sum(items.map((c) => c.monthly)) };
     })
     .sort((a, b) => b.sum - a.sum);
-
-  // Annual gross: entered with the income items; the person is shown next to it when there are two
-  const gross = data.income
-    .filter((i) => i.annual_gross != null && active.includes(i.person))
-    .map((i) => ({
-      name: i.name,
-      amount: i.annual_gross,
-      ...(active.length > 1 ? { person: data.persons[i.person], personColor: PERSON_COLORS[i.person] } : {}),
-    }));
 
   const budgetPerPerson = active.map((p) => {
     const own = sum(data.income.filter((i) => i.person === p).map((i) => i.amount));
@@ -308,8 +341,6 @@ const buildModel = (data) => {
     budget: incomeTotal - costTotal,
     budgetPerPerson,
     single: active.length === 1,
-    gross,
-    grossSum: sum(gross.map((i) => i.amount)),
     empty: LISTS.every((k) => !data[k].length),
   };
 };
@@ -327,6 +358,14 @@ class EssentialBudgetCard extends HTMLElement {
     this._root.addEventListener("input", (e) => this._onInput(e));
     this._root.addEventListener("change", (e) => this._onInput(e));
     this._root.addEventListener("focusout", (e) => this._onBlur(e));
+    this._root.addEventListener("keydown", (e) => {
+      if ((e.key === "Enter" || e.key === " ") && e.target.dataset?.action === "reveal") {
+        e.preventDefault();
+        e.target.click();
+      }
+    });
+    // privacy mode: hide the numbers again as soon as the app or browser tab goes to the background
+    this._onVisibility = () => document.hidden && this._setRevealed(false);
     this._config = {};
     this._open = new Set(); // expanded categories
   }
@@ -393,11 +432,28 @@ class EssentialBudgetCard extends HTMLElement {
 
   connectedCallback() {
     if (this._hass) this._subscribe();
+    document.addEventListener("visibilitychange", this._onVisibility);
     this._syncEdit();
   }
 
   disconnectedCallback() {
     this._unsubscribe();
+    document.removeEventListener("visibilitychange", this._onVisibility);
+    this._setRevealed(false, false);
+  }
+
+  /**
+   * Privacy mode: show or hide all numbers. Shown numbers are hidden again after
+   * privacy_seconds, when the page goes to the background or when the card is left.
+   */
+  _setRevealed(value, render = true) {
+    clearTimeout(this._revealTimer);
+    this._revealed = !!value && !!this._config.privacy;
+    if (this._revealed) {
+      const seconds = Number(this._config.privacy_seconds) || DEFAULT_PRIVACY_SECONDS;
+      this._revealTimer = setTimeout(() => this._setRevealed(false), Math.max(5, seconds) * 1000);
+    }
+    if (render) this._render();
   }
 
   t(key, vars = {}) {
@@ -421,6 +477,17 @@ class EssentialBudgetCard extends HTMLElement {
     } catch (e) {
       return `${Math.round(value)} ${this._currencyCode}`;
     }
+  }
+
+  /** A number for the view: wrapped so that the privacy mode can blur it. */
+  _num(value, money = true) {
+    return `<span class="num">${esc(money ? this._money(value) : value)}</span>`;
+  }
+
+  /** A text with a number in it ("{p} der Einnahmen"), the number wrapped like _num. */
+  _withNum(key, placeholder, value) {
+    const marker = "\u0000";
+    return esc(this.t(key, { [placeholder]: marker })).replace(marker, this._num(value, false));
   }
 
   get _currencyCode() {
@@ -499,6 +566,9 @@ class EssentialBudgetCard extends HTMLElement {
         sessionSet(`eb-reloaded-${this._update.version}`, "1");
         location.reload();
         return;
+      case "reveal":
+        this._setRevealed(!this._revealed);
+        return;
       case "toggle":
         this._open.has(key) ? this._open.delete(key) : this._open.add(key);
         break;
@@ -572,7 +642,7 @@ class EssentialBudgetCard extends HTMLElement {
       this._draft[list] = d[list].map((item) => ({
         ...item,
         amount: amount(item.amount),
-        ...(list === "income" ? { annual_gross: item.annual_gross != null ? amount(item.annual_gross) : "" } : {}),
+        ...(list === "income" || list === "special_payments" ? { gross: item.gross != null ? amount(item.gross) : "" } : {}),
         _id: uid(),
       }));
     this._detail = null;
@@ -603,7 +673,7 @@ class EssentialBudgetCard extends HTMLElement {
 
   _addRow(list, person) {
     const row = { _id: uid(), name: "", amount: "" };
-    if (list === "income") row.person = person || "a";
+    if (list === "income" || list === "special_payments") Object.assign(row, { person: person || "a", gross: "" });
     if (list === "shared_income") row.to = person || "a";
     if (list === "fixed_costs") Object.assign(row, { category: this._activeCostTab(), person: "a", payments_per_year: 12 });
     this._draft[list].push(row);
@@ -670,19 +740,20 @@ class EssentialBudgetCard extends HTMLElement {
         const amount = parseAmount(row.amount);
         if (amount === null) invalid = true;
         const result = { ...row, amount: amount ?? 0 };
-        if ("annual_gross" in row) {
-          // optional: an empty field means no annual gross for this income
-          const gross = String(row.annual_gross ?? "").trim() === "" ? null : parseAmount(row.annual_gross);
-          if (gross === null) delete result.annual_gross;
-          else result.annual_gross = gross;
-          if (gross === null && String(row.annual_gross ?? "").trim() !== "") invalid = true;
+        if ("gross" in row) {
+          // optional: an empty field means no gross for this entry
+          const empty = String(row.gross ?? "").trim() === "";
+          const gross = empty ? null : parseAmount(row.gross);
+          if (gross === null) delete result.gross;
+          else result.gross = gross;
+          if (!empty && gross === null) invalid = true;
         }
         return result;
       });
     }
     if (activePersons(data.persons).length === 1) {
       // without a second person everything belongs to the first one; income of the second person must be moved or removed first
-      if (data.income.some((r) => r.person === "b") || data.shared_income.some((r) => r.to === "b")) {
+      if (data.income.some((r) => r.person === "b") || data.special_payments.some((r) => r.person === "b") || data.shared_income.some((r) => r.to === "b")) {
         this._showProblem("b", this.t("second_person_in_use"));
         return;
       }
@@ -691,7 +762,7 @@ class EssentialBudgetCard extends HTMLElement {
     }
     if (invalid) {
       // open the tab (and category) of the first invalid amount and mark the fields there
-      const bad = (r) => parseAmount(r.amount) === null || ("annual_gross" in r && String(r.annual_gross ?? "").trim() !== "" && parseAmount(r.annual_gross) === null);
+      const bad = (r) => parseAmount(r.amount) === null || ("gross" in r && String(r.gross ?? "").trim() !== "" && parseAmount(r.gross) === null);
       const list = LISTS.find((l) => this._draft[l].some(bad));
       const row = this._draft[list].find(bad);
       if (list === "fixed_costs") this._costTab = row.category.trim();
@@ -754,6 +825,7 @@ class EssentialBudgetCard extends HTMLElement {
       body = group ? this._renderDetail(model, group) : this._renderView(model);
     }
     this._root.lang = this._lang;
+    this._root.classList.toggle("private", !!this._config.privacy && !this._revealed && !this._draft);
     this._root.innerHTML = update + body;
     // keep the active category tab visible in a scrolled tab bar
     const tabs = this._root.querySelector(".tabs");
@@ -773,23 +845,37 @@ class EssentialBudgetCard extends HTMLElement {
     if (m.empty) return `${this._header()}<div class="box msg">${esc(this.t(this._isAdmin ? "empty_admin" : "empty"))}</div>`;
     const negative = (v) => (v < 0 ? " negative" : "");
 
+    // privacy mode: the key figures show/hide all numbers; an eye shows the state
+    const reveal = this._config.privacy
+      ? ` data-action="reveal" role="button" tabindex="0" aria-pressed="${!!this._revealed}" title="${esc(this.t(this._revealed ? "hide_numbers" : "show_numbers"))}"`
+      : "";
+    const eye = this._config.privacy ? `<ha-icon class="eye" icon="mdi:${this._revealed ? "eye-outline" : "eye-off-outline"}"></ha-icon>` : "";
     const kpis = `<div class="kpis">
-      <div class="box kpi"><span class="label">${esc(this.t("income"))}</span><span class="value">${esc(this._money(m.incomeTotal))}</span><span class="sub">${esc(this.t("per_month"))}</span></div>
-      <div class="box kpi"><span class="label">${esc(this.t("fixed_costs"))}</span><span class="value">${esc(this._money(m.costTotal))}</span><span class="sub">${esc(this.t("of_income", { p: `${pct(m.costTotal, m.incomeTotal)} %` }))}</span></div>
-      <div class="box kpi main${negative(m.budget)}"><span class="label">${esc(this.t("budget"))}</span><span class="value">${esc(this._money(m.budget))}</span><span class="sub">${esc(this.t("after_costs"))}</span></div>
+      <div class="box kpi"${reveal}><span class="label">${esc(this.t("income"))}${eye}</span><span class="value">${this._num(m.incomeTotal)}</span><span class="sub">${esc(this.t("per_month"))}</span></div>
+      <div class="box kpi"${reveal}><span class="label">${esc(this.t("fixed_costs"))}${eye}</span><span class="value">${this._num(m.costTotal)}</span><span class="sub">${this._withNum("of_income", "p", `${pct(m.costTotal, m.incomeTotal)} %`)}</span></div>
+      <div class="box kpi main${negative(m.budget)}"${reveal}><span class="label">${esc(this.t("budget"))}${eye}</span><span class="value">${this._num(m.budget)}</span><span class="sub">${esc(this.t("after_costs"))}</span></div>
     </div>`;
 
     const lines = (items) =>
-      items.map((i) => `<div class="line"><span class="ellipsis">${esc(i.name)}</span><span>${esc(this._money(i.amount))}</span></div>`).join("");
-    const block = (name, color, value, items) =>
-      `<div class="block"><div class="block-head"><span class="dot" style="background:${color}"></span><span class="grow">${esc(name)}</span><span class="strong">${esc(this._money(value))}</span></div>${lines(items)}</div>`;
+      items.map((i) => `<div class="line"><span class="ellipsis">${esc(i.name)}</span><span>${this._num(i.amount)}</span></div>`).join("");
+    const block = (name, color, value, items, itemLines = lines(items)) =>
+      `<div class="block"><div class="block-head"><span class="dot" style="background:${color}"></span><span class="grow">${esc(name)}</span><span class="strong">${this._num(value)}</span></div>${itemLines}</div>`;
+    // annual gross per person: 12 × monthly gross of the income ("Gehalt (12 × 4.800 €)") and the special payments
+    const grossLines = (p) =>
+      p.grossItems
+        .map(
+          (i) =>
+            `<div class="line"><span class="ellipsis">${esc(i.name)}${i.monthly != null ? ` <span class="small">(12 × ${this._num(i.monthly)})</span>` : ""}</span><span>${this._num(i.value)}</span></div>`
+        )
+        .join("");
+    const grossPeople = m.people.filter((p) => p.grossItems.length);
     const income = `<div class="box">${this._section("mdi:cash-plus", this.t("income"))}
       <div class="blocks">${m.people.map((p) => block(p.name, p.color, p.sum, p.items)).join("")}
       ${m.shared.length ? block(this.t("shared"), PERSON_COLORS.shared, m.sharedSum, m.shared) : ""}</div></div>`;
 
     const maxGroup = Math.max(...m.groups.map((g) => g.sum), 0);
     const categoryName = (g) => g.category || this.t("no_category");
-    const costs = `<div class="box">${this._section("mdi:receipt-text-outline", this.t("fixed_costs"), esc(`${this._money(m.costTotal)} ${this.t("per_month")}`))}
+    const costs = `<div class="box">${this._section("mdi:receipt-text-outline", this.t("fixed_costs"), `${this._num(m.costTotal)} ${esc(this.t("per_month"))}`)}
       ${m.groups
         .map((g) => {
           const open = g.items.length > 1 && this._open.has(g.category); // a single item needs no expanding
@@ -801,7 +887,7 @@ class EssentialBudgetCard extends HTMLElement {
                   (c) => `<div class="item"><div class="item-main"><span class="ellipsis" title="${esc(c.name)}">${esc(c.name)}</span>
                   <span class="item-freq">${esc(this._freq(c.payments_per_year))}</span>
                   <span class="bar thin"><i style="width:${maxItem ? (c.monthly / maxItem) * 100 : 0}%;background:${g.color}"></i></span></div>
-                  <span class="item-value">${esc(this._money(c.monthly))}</span></div>`
+                  <span class="item-value">${this._num(c.monthly)}</span></div>`
                 )
                 .join("")}</div>`
             : "";
@@ -812,36 +898,30 @@ class EssentialBudgetCard extends HTMLElement {
                 : `<span class="toggle-space"></span>`}
               <button class="cat-btn" data-action="detail" data-key="${esc(g.category)}" aria-label="${esc(this.t("open_details", { c: name }))}">
                 <span class="cat-main"><span class="ellipsis strong">${esc(name)}</span><span class="bar"><i style="width:${maxGroup ? (g.sum / maxGroup) * 100 : 0}%;background:${g.color}"></i></span></span>
-                <span class="cat-share">${pct(g.sum, m.costTotal)} %</span>
-                <span class="cat-value">${esc(this._money(g.sum))}</span>
+                <span class="cat-share">${this._num(`${pct(g.sum, m.costTotal)} %`, false)}</span>
+                <span class="cat-value">${this._num(g.sum)}</span>
                 <ha-icon class="muted" icon="mdi:chevron-right"></ha-icon>
               </button>
             </div>${items}</div>`;
         })
         .join("")}</div>`;
 
-    const rows = (items) =>
-      items
-        .map(
-          (i) =>
-            `<div class="row"><span class="row-name"><span class="ellipsis">${esc(i.name)}</span>${i.person ? `<span class="who" style="--c:${i.personColor}">${esc(i.person)}</span>` : ""}</span><span>${esc(this._money(i.amount))}</span></div>`
-        )
-        .join("");
     const perPerson = `<div class="box">${this._section("mdi:wallet-outline", this.t("budget_per_person"))}
       ${m.budgetPerPerson
-        .map((p) => `<div class="row"><span class="strong" style="color:${p.color}">${esc(p.name)}</span><span class="strong${negative(p.value)}">${esc(this._money(p.value))}</span></div>`)
+        .map((p) => `<div class="row"><span class="strong" style="color:${p.color}">${esc(p.name)}</span><span class="strong${negative(p.value)}">${this._num(p.value)}</span></div>`)
         .join("")}</div>`;
-    const gross = `<div class="box">${this._section("mdi:calendar-range", this.t("annual_gross"), esc(this._money(m.grossSum)))}${rows(m.gross)}</div>`;
 
     // With one person the budget per person equals the budget: no extra box
     // second row: only the boxes that have something to show
-    const row2 = [m.single ? "" : perPerson, m.gross.length ? gross : ""].filter(Boolean);
+    const gross = `<div class="box">${this._section("mdi:calendar-range", this.t("annual_gross"), this._num(sum(grossPeople.map((p) => p.gross))))}
+      <div class="blocks">${grossPeople.map((p) => block(p.name, p.color, p.gross, null, grossLines(p))).join("")}</div></div>`;
+    const row2 = [m.single ? "" : perPerson, grossPeople.length ? gross : ""].filter(Boolean);
     return `${this._header()}${kpis}<div class="row1">${income}${costs}</div>${row2.length ? `<div class="row2" style="--cols:${row2.length}">${row2.join("")}</div>` : ""}`;
   }
 
   _renderDetail(m, g) {
     const name = g.category || this.t("no_category");
-    const tile = (label, value) => `<div class="box kpi small"><span class="label">${esc(label)}</span><span class="value">${esc(value)}</span></div>`;
+    const tile = (label, valueHtml) => `<div class="box kpi small"><span class="label">${esc(label)}</span><span class="value">${valueHtml}</span></div>`;
     const items = g.items
       .map((c) => {
         const person = this._data.persons[c.person];
@@ -849,9 +929,9 @@ class EssentialBudgetCard extends HTMLElement {
           <span class="d-name strong">${esc(c.name)}</span>
           <span class="d-person"><span class="chip" style="--c:${PERSON_COLORS[c.person]}">${esc(person)}</span></span>
           <span class="d-freq">${esc(this._freq(c.payments_per_year))}</span>
-          <span class="d-paid"><span class="narrow-only">${esc(this._money(c.amount))} ${esc(this._freq(c.payments_per_year))}</span><span class="wide-only">${esc(this._money(c.amount))}</span></span>
-          <span class="d-month strong">${esc(this._money(c.monthly))}<span class="narrow-only muted small"> ${esc(this.t("per_month"))}</span></span>
-          <span class="d-year">${esc(this._money(c.monthly * 12))}<span class="narrow-only"> ${esc(this.t("per_year"))}</span></span>
+          <span class="d-paid"><span class="narrow-only">${this._num(c.amount)} ${esc(this._freq(c.payments_per_year))}</span><span class="wide-only">${this._num(c.amount)}</span></span>
+          <span class="d-month strong">${this._num(c.monthly)}<span class="narrow-only muted small"> ${esc(this.t("per_month"))}</span></span>
+          <span class="d-year">${this._num(c.monthly * 12)}<span class="narrow-only"> ${esc(this.t("per_year"))}</span></span>
         </div>`;
       })
       .join("");
@@ -859,11 +939,11 @@ class EssentialBudgetCard extends HTMLElement {
         <button class="icon-btn round" data-action="back" aria-label="${esc(this.t("back"))}" title="${esc(this.t("back"))}"><ha-icon icon="mdi:arrow-left"></ha-icon></button>
         <span class="dot square" style="background:${g.color}"></span><h1 class="title grow">${esc(name)}</h1>
       </div>
-      <div class="kpis detail">${tile(this.t("per_month"), this._money(g.sum))}${tile(this.t("per_year"), this._money(g.sum * 12))}${tile(this.t("share"), `${pct(g.sum, m.costTotal)} %`)}</div>
+      <div class="kpis detail">${tile(this.t("per_month"), this._num(g.sum))}${tile(this.t("per_year"), this._num(g.sum * 12))}${tile(this.t("share"), this._num(`${pct(g.sum, m.costTotal)} %`, false))}</div>
       <div class="box table ${m.single ? "single" : ""}">
         <div class="drow dhead"><span class="d-name">${esc(this.t("item"))}</span><span class="d-person">${esc(this.t("person"))}</span><span class="d-freq">${esc(this.t("frequency"))}</span><span class="d-paid">${esc(this.t("per_payment"))}</span><span class="d-month">${esc(this.t("per_month"))}</span><span class="d-year">${esc(this.t("per_year"))}</span></div>
         ${items}
-        <div class="drow dsum"><span class="d-name">${esc(this.t("sum"))}</span><span class="d-month">${esc(this._money(g.sum))}</span><span class="d-year">${esc(this._money(g.sum * 12))}</span></div>
+        <div class="drow dsum"><span class="d-name">${esc(this.t("sum"))}</span><span class="d-month">${this._num(g.sum)}</span><span class="d-year">${this._num(g.sum * 12)}</span></div>
       </div>`;
   }
 
@@ -909,7 +989,7 @@ class EssentialBudgetCard extends HTMLElement {
     // One tab per person: name, income and shared income received by the person.
     // The second person's tab stays while it has entries (so they can be removed after clearing the name).
     const hasEntries = (p) =>
-      d.income.some((r) => r.person === p) || d.shared_income.some((r) => r.to === p);
+      d.income.some((r) => r.person === p) || d.special_payments.some((r) => r.person === p) || d.shared_income.some((r) => r.to === p);
     const personTabs = PERSONS.filter((p) => p === "a" || active.includes(p) || hasEntries(p) || this._addingPerson);
     const personLabel = (p) => d.persons[p].trim() || this.t("person_n", { n: PERSONS.indexOf(p) + 1 });
 
@@ -917,16 +997,21 @@ class EssentialBudgetCard extends HTMLElement {
       const name = `<div class="box">${this._section("mdi:account", this.t("person_name"))}
         <label class="field"><span class="sr">${esc(this.t("person_name"))}</span><input type="text" data-list="persons" data-field="${p}" value="${esc(d.persons[p])}" placeholder="${esc(this.t(p === "a" ? "person_name" : "name_optional"))}"></label>
         ${p === "b" ? `<div class="hint flat">${esc(this.t("one_person_hint"))}</div>` : ""}</div>`;
-      const incomeRows = d.income.filter((r) => r.person === p);
-      const income = `<div class="box">${this._section("mdi:cash-plus", this.t("income"))}
-        ${incomeRows.length ? head("income", [["name", this.t("name")], ["amount", this.t("net_per_month")], ["gross", this.t("gross_optional")]]) : ""}
-        ${incomeRows
+      // income (monthly) and special payments (once a year): name, gross, net
+      const moneyRows = (list, label, shortGross, shortNet, longGross, longNet, icon, addLabel, hint = "") => {
+        const rows = d[list].filter((r) => r.person === p);
+        return `<div class="box">${this._section(icon, label, "", hint ? `<div class="hint">${esc(hint)}</div>` : "")}
+        ${rows.length ? head("income", [["name", this.t("name")], ["gross", longGross], ["amount", longNet]]) : ""}
+        ${rows
           .map(
             (r) =>
-              `<div class="erow income flow" data-id="${r._id}">${input("income", r, "name", this.t("name"))}${input("income", r, "amount", this.t("net_per_month"), 'inputmode="decimal" autocomplete="off"')}${input("income", r, "annual_gross", this.t("gross_optional"), 'inputmode="decimal" autocomplete="off"')}${remove("income", r)}</div>`
+              `<div class="erow income flow" data-id="${r._id}">${input(list, r, "name", this.t("name"))}${input(list, r, "gross", shortGross, 'inputmode="decimal" autocomplete="off"')}${input(list, r, "amount", shortNet, 'inputmode="decimal" autocomplete="off"')}${remove(list, r)}</div>`
           )
           .join("")}
-        ${add("income", this.t("add_income"), p)}</div>`;
+        ${add(list, addLabel, p)}</div>`;
+      };
+      const income = moneyRows("income", this.t("income_edit"), this.t("gross_month_short"), this.t("net_month_short"), this.t("gross_month"), this.t("net_month"), "mdi:cash-plus", this.t("add_income"));
+      const special = moneyRows("special_payments", this.t("special_payments"), this.t("gross_short"), this.t("net_short"), this.t("gross"), this.t("net"), "mdi:gift-outline", this.t("add_special"), this.t("special_hint"));
       // shared income is listed with the person whose account receives it; with one person only while entries exist
       const sharedRows = d.shared_income.filter((r) => r.to === p);
       const shared =
@@ -941,7 +1026,7 @@ class EssentialBudgetCard extends HTMLElement {
           )
           .join("")}
         ${add("shared_income", this.t("add_shared"), p)}</div>`;
-      return name + income + shared;
+      return name + income + special + shared;
     };
 
     const tabs = `<div class="tabs" role="tablist" aria-label="${esc(this.t("categories"))}">${categories
@@ -1009,11 +1094,14 @@ class EssentialBudgetCardEditor extends HTMLElement {
     if (!this._form) {
       this._form = document.createElement("ha-form");
       const texts = TEXTS[pickLanguage(this._hass)];
-      this._form.computeLabel = () => texts.title_optional;
+      this._form.computeLabel = (field) => texts[field.name === "title" ? "title_optional" : field.name];
       this._form.addEventListener("value-changed", (e) => {
         const config = { ...this._config, ...e.detail.value };
         if (!config.title) delete config.title;
         delete config.currency; // option of 0.2.0 betas, the currency now comes from Home Assistant
+        // only values that differ from the defaults are stored
+        if (!config.privacy) delete config.privacy;
+        if (!config.privacy || !config.privacy_seconds || Number(config.privacy_seconds) === DEFAULT_PRIVACY_SECONDS) delete config.privacy_seconds;
         this._config = config;
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
       });
@@ -1022,8 +1110,15 @@ class EssentialBudgetCardEditor extends HTMLElement {
     this._form.hass = this._hass;
     this._form.schema = [
       { name: "title", selector: { text: {} } },
+      { name: "privacy", selector: { boolean: {} } },
+      // the delay only matters with the privacy mode
+      ...(this._config.privacy ? [{ name: "privacy_seconds", selector: { number: { min: 5, max: 600, step: 5, mode: "box", unit_of_measurement: "s" } } }] : []),
     ];
-    this._form.data = { title: this._config.title || "" };
+    this._form.data = {
+      title: this._config.title || "",
+      privacy: !!this._config.privacy,
+      privacy_seconds: Number(this._config.privacy_seconds) || DEFAULT_PRIVACY_SECONDS,
+    };
   }
 }
 
@@ -1066,8 +1161,15 @@ const STYLE = `
   .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .kpi { gap: 4px; }
   .kpi .label, .kpi .sub { font-size: 13px; color: var(--secondary-text-color); }
+  .kpi .label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .kpi .eye { --mdc-icon-size: 18px; }
+  .kpi[data-action="reveal"] { cursor: pointer; user-select: none; }
+  .kpi[data-action="reveal"]:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+  /* privacy mode: numbers unreadable until revealed */
+  .num { transition: filter 0.2s; }
+  .private .num { filter: blur(8px); user-select: none; }
   .kpi .value { font-size: 24px; font-weight: 700; }
-  .kpi.main { grid-column: 1 / -1; order: -1; box-shadow: inset 0 0 0 2px var(--primary-color); }
+  .kpi.main { grid-column: 1 / -1; box-shadow: inset 0 0 0 2px var(--primary-color); }
   .kpi.main .value { color: var(--primary-color); }
   .kpi.main.negative { box-shadow: inset 0 0 0 2px var(--error-color, #db4437); }
   .kpis.detail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1138,12 +1240,18 @@ const STYLE = `
   .erow { display: grid; gap: 8px 10px; align-items: end; padding: 8px 0; border-top: 1px solid var(--divider-color); }
   .erow.persons { grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 0; }
   .erow.simple { grid-template-columns: minmax(0, 1fr) 110px 40px; }
-  .erow.income { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px; grid-template-areas: "name name remove" "amount gross gross"; }
   .erow.income .f-name { grid-area: name; } .erow.income .f-amount { grid-area: amount; }
-  .erow.income .f-annual_gross, .erow.income .f-gross { grid-area: gross; } .erow.income .remove { grid-area: remove; }
-  .field.f-annual_gross input { text-align: right; font-variant-numeric: tabular-nums; }
+  .erow.income .f-gross { grid-area: gross; } .erow.income .remove { grid-area: remove; }
+  /* income on narrow cards: name, net, gross and delete in one line if it fits (short labels above the amounts) */
+  .erow.income.flow { gap: 8px 6px; }
+  .erow.income.flow .field.f-name { flex: 1 1 60px; order: 0; }
+  .erow.income.flow .field.f-gross { flex: 0 1 100px; order: 1; }
+  .erow.income.flow .field.f-amount { flex: 0 1 100px; order: 2; }
+  .erow.income.flow .remove { order: 3; width: 32px; }
+  .erow.income .sr { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .field.f-gross input { text-align: right; font-variant-numeric: tabular-nums; }
   /* narrow: both amounts of an income need visible labels (wide cards have column headers) */
-  .erow.income .f-amount .sr, .erow.income .f-annual_gross .sr { position: static; width: auto; height: auto; clip: auto; overflow: visible; }
+  .erow.income .f-amount .sr, .erow.income .f-gross .sr { position: static; width: auto; height: auto; clip: auto; overflow: visible; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .ehead { display: none; }
   .erow.shared { grid-template-columns: minmax(0, 1fr) 110px 40px; grid-template-areas: "name name remove" "to amount amount"; }
@@ -1157,8 +1265,6 @@ const STYLE = `
   .field input.invalid { background: color-mix(in srgb, var(--error-color, #db4437) 18%, transparent); border-color: var(--error-color, #db4437); }
   .remove { width: 40px; height: 40px; }
   .toggle-space { width: 44px; flex-shrink: 0; }
-  .row-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-  .who { flex-shrink: 0; font-size: 12px; font-weight: 600; color: var(--c); }
   .edit-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--divider-color); scrollbar-width: thin; }
   .edit-tab { flex-shrink: 0; height: 44px; padding: 0 16px; border: 0; border-bottom: 3px solid transparent; background: transparent;
     cursor: pointer; font-size: 14px; font-weight: 600; color: var(--secondary-text-color); white-space: nowrap; }
@@ -1213,7 +1319,7 @@ const STYLE = `
   /* Desktop layout */
   @container (min-width: 700px) {
     .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .kpi.main { grid-column: auto; order: 0; }
+    .kpi.main { grid-column: auto; }
     .kpi .value { font-size: 28px; }
     .kpi.small .value { font-size: 24px; }
     .row1 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1236,8 +1342,8 @@ const STYLE = `
     .erow.tabrow .f-name { grid-area: name; } .erow.tabrow .f-amount { grid-area: amount; } .erow.tabrow .f-freq { grid-area: freq; }
     .erow.tabrow .f-person { grid-area: person; } .erow.tabrow .remove { grid-area: remove; width: 40px; }
     .ehead.tabrow { padding-bottom: 0; }
-    .erow.income { grid-template-columns: minmax(0, 1fr) 140px 180px 40px; grid-template-areas: "name amount gross remove"; }
-    .erow.income .f-amount .sr, .erow.income .f-annual_gross .sr { position: absolute; width: 1px; height: 1px; clip: rect(0 0 0 0); overflow: hidden; }
+    .erow.income { grid-template-columns: minmax(0, 1fr) 150px 150px 40px; grid-template-areas: "name gross amount remove"; }
+    .erow.income .f-amount .sr, .erow.income .f-gross .sr { position: absolute; width: 1px; height: 1px; clip: rect(0 0 0 0); overflow: hidden; }
     .ehead { display: grid; padding: 0 0 2px; border-top: 0; font-size: 12px; color: var(--secondary-text-color); }
     .ehead + .erow { border-top: 0; }
     .footer .hint { flex-basis: auto; }

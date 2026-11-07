@@ -49,6 +49,18 @@ def test_defaults() -> None:
     assert cost == {"name": "X", "category": "", "person": "a", "amount": 10.0, "payments_per_year": 12}
 
 
+def test_one_person() -> None:
+    data = validate({"persons": {"a": "Alex", "b": " "}, "income": [{"name": "Salary", "person": "a", "amount": 100}]})
+    assert data["persons"] == {"a": "Alex", "b": ""}
+    assert totals(data)["budget_per_person"] == {"a": 100}
+    try:
+        validate({"persons": {"a": "Alex"}, "fixed_costs": [{"name": "X", "person": "b", "amount": 1}]})
+    except BudgetError as err:
+        assert "fixed_costs 1: person" in str(err) and "no second person" in str(err)
+    else:
+        raise AssertionError("cost of a missing second person accepted")
+
+
 def test_invalid() -> None:
     cases = [
         ({"income": [{"name": "X", "person": "c", "amount": 1}]}, "income 1: person"),

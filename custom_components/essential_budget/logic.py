@@ -4,7 +4,7 @@ File format (essential_budget.json), amounts in the currency of Home Assistant w
 
 {
   "version": 1,
-  "persons": {"a": "Alex", "b": "Sam"},
+  "persons": {"a": "Alex", "b": "Sam"},   (an empty name for "b" = budget of one person)
   "income": [{"name": "Salary", "person": "a", "amount": 3150.0}],
   "shared_income": [{"name": "Child benefit", "to": "a", "amount": 518.0}],
   "fixed_costs": [{"name": "Rent", "category": "Home", "person": "a", "amount": 1480.0, "payments_per_year": 12}],
@@ -25,7 +25,7 @@ from typing import Any
 
 FILE_VERSION = 1
 PERSONS = ("a", "b")
-DEFAULT_PERSON_NAMES = {"a": "Person A", "b": "Person B"}
+DEFAULT_PERSON_NAME = "Person A"  # the first person always has a name; the second one is optional
 
 MAX_ITEMS = 300  # per list
 MAX_NAME = 80
@@ -48,12 +48,17 @@ class BudgetError(ValueError):
 
 
 def default_data(name_a: str = "", name_b: str = "") -> dict[str, Any]:
-    """Empty budget for a new installation."""
+    """Empty budget for a new installation (without name_b for one person)."""
     return {
         "version": FILE_VERSION,
-        "persons": {"a": name_a.strip() or DEFAULT_PERSON_NAMES["a"], "b": name_b.strip() or DEFAULT_PERSON_NAMES["b"]},
+        "persons": {"a": " ".join(name_a.split()) or DEFAULT_PERSON_NAME, "b": " ".join(name_b.split())},
         **{key: [] for key in LISTS},
     }
+
+
+def active_persons(data: dict[str, Any]) -> tuple[str, ...]:
+    """("a",) for one person, ("a", "b") for two."""
+    return PERSONS if data["persons"].get("b") else ("a",)
 
 
 def _text(value: Any, where: str, max_length: int) -> str:
@@ -76,9 +81,9 @@ def _amount(value: Any, where: str) -> float:
     return round(float(value), 2)
 
 
-def _person(value: Any, where: str) -> str:
-    if value not in PERSONS:
-        raise BudgetError(f"{where}: must be one of {', '.join(PERSONS)}")
+def _person(value: Any, where: str, persons: tuple[str, ...]) -> str:
+    if value not in persons:
+        raise BudgetError(f"{where}: must be {' or '.join(persons)}" + ("" if len(persons) > 1 else " (no second person)"))
     return value
 
 
@@ -88,7 +93,7 @@ def _payments(value: Any, where: str) -> int:
     return int(value)
 
 
-def _item(list_key: str, raw: Any, index: int) -> dict[str, Any] | None:
+def _item(list_key: str, raw: Any, index: int, persons: tuple[str, ...]) -> dict[str, Any] | None:
     """One cleaned entry, or None for an empty row (no name and no amount)."""
     where = f"{list_key} {index + 1}"
     if not isinstance(raw, dict):
@@ -105,7 +110,7 @@ def _item(list_key: str, raw: Any, index: int) -> dict[str, Any] | None:
         if field == "amount":
             item[field] = _amount(0 if value in (None, "") else value, f"{where}: amount")
         elif field in ("person", "to"):
-            item[field] = _person(value, f"{where}: {field}")
+            item[field] = _person(value, f"{where}: {field}", persons)
         elif field == "category":
             item[field] = _text(value, f"{where}: category", MAX_CATEGORY)
         elif field == "payments_per_year":
@@ -127,9 +132,11 @@ def validate(data: Any) -> dict[str, Any]:
     if not isinstance(persons_raw, dict):
         raise BudgetError("persons: object expected")
     persons = {
-        p: _text(persons_raw.get(p), f"persons: {p}", MAX_PERSON_NAME) or DEFAULT_PERSON_NAMES[p] for p in PERSONS
+        "a": _text(persons_raw.get("a"), "persons: a", MAX_PERSON_NAME) or DEFAULT_PERSON_NAME,
+        "b": _text(persons_raw.get("b"), "persons: b", MAX_PERSON_NAME),
     }
     result: dict[str, Any] = {"version": FILE_VERSION, "persons": persons}
+    active = active_persons(result)
     for key in LISTS:
         raw_list = data.get(key)
         if raw_list is None:
@@ -138,7 +145,7 @@ def validate(data: Any) -> dict[str, Any]:
             raise BudgetError(f"{key}: list expected")
         if len(raw_list) > MAX_ITEMS:
             raise BudgetError(f"{key}: more than {MAX_ITEMS} entries")
-        result[key] = [item for i, raw in enumerate(raw_list) if (item := _item(key, raw, i)) is not None]
+        result[key] = [item for i, raw in enumerate(raw_list) if (item := _item(key, raw, i, active)) is not None]
     return result
 
 
@@ -149,14 +156,15 @@ def monthly(cost: dict[str, Any]) -> float:
 
 def totals(data: dict[str, Any]) -> dict[str, Any]:
     """Monthly sums as shown in the card (exact values, rounding happens only for display)."""
-    income = {p: sum(i["amount"] for i in data["income"] if i["person"] == p) for p in PERSONS}
-    shared = {p: sum(i["amount"] for i in data["shared_income"] if i["to"] == p) for p in PERSONS}
-    costs = {p: sum(monthly(c) for c in data["fixed_costs"] if c["person"] == p) for p in PERSONS}
+    persons = active_persons(data)
+    income = {p: sum(i["amount"] for i in data["income"] if i["person"] == p) for p in persons}
+    shared = {p: sum(i["amount"] for i in data["shared_income"] if i["to"] == p) for p in persons}
+    costs = {p: sum(monthly(c) for c in data["fixed_costs"] if c["person"] == p) for p in persons}
     income_total = sum(income.values()) + sum(shared.values())
     costs_total = sum(costs.values())
     return {
         "income": income_total,
         "fixed_costs": costs_total,
         "budget": income_total - costs_total,
-        "budget_per_person": {p: income[p] + shared[p] - costs[p] for p in PERSONS},
+        "budget_per_person": {p: income[p] + shared[p] - costs[p] for p in persons},
     }

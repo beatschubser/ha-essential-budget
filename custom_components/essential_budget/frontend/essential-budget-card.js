@@ -8,7 +8,7 @@
  * Layout: one column on narrow cards, desktop layout from DESKTOP_WIDTH (container query).
  */
 
-const VERSION = "0.1.0-beta.1";
+const VERSION = "0.1.0-beta.2";
 const WS = "essential_budget";
 const PERSONS = ["a", "b"];
 const PERSON_COLORS = { a: "#2f6fde", b: "#d9822b", shared: "#7a8794" };
@@ -58,6 +58,10 @@ const TEXTS = {
     edit_title: "Edit budget",
     persons: "Persons",
     name_of: "Name of person {n}",
+    name_of_optional: "Name of person {n} (optional)",
+    person_n: "Person {n}",
+    one_person_hint: "Leave the second name empty for a budget of one person.",
+    second_person_in_use: "The second person still has income. Remove it or enter a name for the second person.",
     shared_income: "Shared income",
     received_by: "Received by",
     name: "Name",
@@ -113,6 +117,10 @@ const TEXTS = {
     edit_title: "Budget bearbeiten",
     persons: "Personen",
     name_of: "Name Person {n}",
+    name_of_optional: "Name Person {n} (optional)",
+    person_n: "Person {n}",
+    one_person_hint: "Für das Budget einer einzelnen Person bleibt der zweite Name leer.",
+    second_person_in_use: "Die zweite Person hat noch Einnahmen. Entferne sie oder trag einen Namen für die zweite Person ein.",
     shared_income: "Geteilte Einnahmen",
     received_by: "Eingang bei",
     name: "Bezeichnung",
@@ -159,6 +167,8 @@ const sum = (xs) => xs.reduce((s, x) => s + x, 0);
 const errorText = (e) => e?.message || String(e);
 const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
 const monthly = (cost) => (cost.amount * cost.payments_per_year) / 12;
+/** ["a"] for one person, ["a", "b"] when the second person has a name. */
+const activePersons = (persons) => PERSONS.filter((p) => p === "a" || String(persons?.[p] || "").trim());
 
 const sessionGet = (key) => {
   try {
@@ -228,7 +238,8 @@ const checkVersion = async (hass) => {
  * --------------------------------------------------------------------- */
 
 const buildModel = (data) => {
-  const people = PERSONS.map((p) => {
+  const active = activePersons(data.persons);
+  const people = active.map((p) => {
     const items = data.income.filter((i) => i.person === p);
     return { key: p, name: data.persons[p], color: PERSON_COLORS[p], items, sum: sum(items.map((i) => i.amount)) };
   });
@@ -245,7 +256,7 @@ const buildModel = (data) => {
     })
     .sort((a, b) => b.sum - a.sum);
 
-  const budgetPerPerson = PERSONS.map((p) => {
+  const budgetPerPerson = active.map((p) => {
     const own = sum(data.income.filter((i) => i.person === p).map((i) => i.amount));
     const shared = sum(data.shared_income.filter((i) => i.to === p).map((i) => i.amount));
     const cost = sum(costs.filter((c) => c.person === p).map((c) => c.monthly));
@@ -261,6 +272,7 @@ const buildModel = (data) => {
     costTotal,
     budget: incomeTotal - costTotal,
     budgetPerPerson,
+    single: active.length === 1,
     gross: data.annual_gross,
     grossSum: sum(data.annual_gross.map((i) => i.amount)),
     bonuses: data.bonuses,
@@ -480,6 +492,8 @@ class EssentialBudgetCard extends HTMLElement {
     if (!field) return;
     if (list === "persons") {
       this._draft.persons[field] = el.value;
+      // on leaving the field: show or hide the sections of the second person
+      if (e.type === "change" && activePersons(this._draft.persons).length !== this._editPersons) this._render();
       return;
     }
     const row = this._draft[list]?.find((r) => r._id === id);
@@ -507,6 +521,15 @@ class EssentialBudgetCard extends HTMLElement {
       });
     }
     this._root.querySelectorAll('[data-field="amount"]').forEach((el) => this._markField(el));
+    if (activePersons(data.persons).length === 1) {
+      // without a second person everything belongs to the first one; income of the second person must be moved or removed first
+      if (data.income.some((r) => r.person === "b")) {
+        this._showSaveError(this.t("second_person_in_use"));
+        return;
+      }
+      data.shared_income.forEach((r) => (r.to = "a"));
+      data.fixed_costs.forEach((r) => (r.person = "a"));
+    }
     if (invalid) {
       this._showSaveError(this.t("invalid"));
       return;
@@ -629,7 +652,8 @@ class EssentialBudgetCard extends HTMLElement {
     const gross = `<div class="box">${this._section("mdi:calendar-range", this.t("annual_gross"), esc(this._money(m.grossSum)))}${rows(m.gross)}</div>`;
     const bonuses = `<div class="box">${this._section("mdi:gift-outline", this.t("bonuses"), esc(this._money(m.bonusSum)), `<div class="hint">${esc(this.t("bonuses_hint"))}</div>`)}${rows(m.bonuses)}</div>`;
 
-    return `${this._header()}${kpis}<div class="row1">${income}${costs}</div><div class="row2">${perPerson}${gross}${bonuses}</div>`;
+    // With one person the budget per person equals the budget: no extra box
+    return `${this._header()}${kpis}<div class="row1">${income}${costs}</div><div class="row2 ${m.single ? "two" : ""}">${m.single ? "" : perPerson}${gross}${bonuses}</div>`;
   }
 
   _renderDetail(m, g) {
@@ -653,7 +677,7 @@ class EssentialBudgetCard extends HTMLElement {
         <span class="dot square" style="background:${g.color}"></span><h1 class="title grow">${esc(name)}</h1>
       </div>
       <div class="kpis detail">${tile(this.t("per_month"), this._money(g.sum))}${tile(this.t("per_year"), this._money(g.sum * 12))}${tile(this.t("share"), `${pct(g.sum, m.costTotal)} %`)}</div>
-      <div class="box table">
+      <div class="box table ${m.single ? "single" : ""}">
         <div class="drow dhead"><span class="d-name">${esc(this.t("item"))}</span><span class="d-person">${esc(this.t("person"))}</span><span class="d-freq">${esc(this.t("frequency"))}</span><span class="d-paid">${esc(this.t("per_payment"))}</span><span class="d-month">${esc(this.t("per_month"))}</span><span class="d-year">${esc(this.t("per_year"))}</span></div>
         ${items}
         <div class="drow dsum"><span class="d-name">${esc(this.t("sum"))}</span><span class="d-month">${esc(this._money(g.sum))}</span><span class="d-year">${esc(this._money(g.sum * 12))}</span></div>
@@ -686,29 +710,34 @@ class EssentialBudgetCard extends HTMLElement {
 
     const categories = [...new Set(d.fixed_costs.map((c) => c.category.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 
+    const active = activePersons(d.persons);
+    const single = active.length === 1;
+    this._editPersons = active.length;
     const persons = `<div class="box">${this._section("mdi:account-multiple", this.t("persons"))}<div class="erow persons">${PERSONS.map(
       (p, i) =>
-        `<label class="field"><span>${esc(this.t("name_of", { n: i + 1 }))}</span><input type="text" data-list="persons" data-field="${p}" value="${esc(d.persons[p])}"></label>`
-    ).join("")}</div></div>`;
+        `<label class="field"><span>${esc(this.t(p === "a" ? "name_of" : "name_of_optional", { n: i + 1 }))}</span><input type="text" data-list="persons" data-field="${p}" value="${esc(d.persons[p])}"></label>`
+    ).join("")}</div><div class="hint flat">${esc(this.t("one_person_hint"))}</div></div>`;
 
-    const income = `<div class="box">${this._section("mdi:cash-plus", this.t("income"))}${PERSONS.map(
-      (p) => `<div class="esub"><div class="block-head"><span class="dot" style="background:${PERSON_COLORS[p]}"></span>${esc(d.persons[p])}</div>
+    // the second person's income stays visible while it has entries, so it can be removed after clearing the name
+    const incomePersons = PERSONS.filter((p) => active.includes(p) || d.income.some((r) => r.person === p));
+    const income = `<div class="box">${this._section("mdi:cash-plus", this.t("income"))}${incomePersons.map(
+      (p, i) => `<div class="esub"><div class="block-head"><span class="dot" style="background:${PERSON_COLORS[p]}"></span>${esc(d.persons[p].trim() || this.t("person_n", { n: i + 1 }))}</div>
         ${d.income.filter((r) => r.person === p).map((r) => `<div class="erow simple" data-id="${r._id}">${input("income", r, "name", this.t("name"))}${amount("income", r)}${remove("income", r)}</div>`).join("")}
         ${add("income", this.t("add_income"), p)}</div>`
     ).join("")}</div>`;
 
     const head = (cls, cols) => `<div class="erow ${cls} ehead">${cols.map(([f, label]) => `<span class="f-${f}">${esc(label)}</span>`).join("")}</div>`;
     const shared = `<div class="box">${this._section("mdi:account-group-outline", this.t("shared_income"))}
-      ${d.shared_income.length ? head("shared", [["name", this.t("name")], ["to", this.t("received_by")], ["amount", this.t("amount")]]) : ""}
-      ${d.shared_income.map((r) => `<div class="erow shared" data-id="${r._id}">${input("shared_income", r, "name", this.t("name"))}${personSelect("shared_income", r, "to", this.t("received_by"))}${amount("shared_income", r)}${remove("shared_income", r)}</div>`).join("")}
+      ${d.shared_income.length && !single ? head("shared", [["name", this.t("name")], ["to", this.t("received_by")], ["amount", this.t("amount")]]) : ""}
+      ${d.shared_income.map((r) => `<div class="erow ${single ? "simple" : "shared"}" data-id="${r._id}">${input("shared_income", r, "name", this.t("name"))}${single ? "" : personSelect("shared_income", r, "to", this.t("received_by"))}${amount("shared_income", r)}${remove("shared_income", r)}</div>`).join("")}
       ${add("shared_income", this.t("add_shared"))}</div>`;
 
     const costs = `<div class="box">${this._section("mdi:receipt-text-outline", this.t("fixed_costs"))}
-      ${d.fixed_costs.length ? head("cost", [["name", this.t("name")], ["category", this.t("category")], ["person", this.t("paid_by")], ["freq", this.t("frequency")], ["amount", this.t("amount")]]) : ""}
+      ${d.fixed_costs.length ? head(`cost ${single ? "single" : ""}`, [["name", this.t("name")], ["category", this.t("category")], ...(single ? [] : [["person", this.t("paid_by")]]), ["freq", this.t("frequency")], ["amount", this.t("amount")]]) : ""}
       <datalist id="eb-categories">${categories.map((c) => `<option value="${esc(c)}"></option>`).join("")}</datalist>
       ${d.fixed_costs
         .map(
-          (r) => `<div class="erow cost" data-id="${r._id}">${input("fixed_costs", r, "name", this.t("name"))}${input("fixed_costs", r, "category", this.t("category"), 'list="eb-categories"')}${personSelect("fixed_costs", r, "person", this.t("paid_by"))}${freqSelect(r)}${amount("fixed_costs", r)}${remove("fixed_costs", r)}</div>`
+          (r) => `<div class="erow cost ${single ? "single" : ""}" data-id="${r._id}">${input("fixed_costs", r, "name", this.t("name"))}${input("fixed_costs", r, "category", this.t("category"), 'list="eb-categories"')}${single ? "" : personSelect("fixed_costs", r, "person", this.t("paid_by"))}${freqSelect(r)}${amount("fixed_costs", r)}${remove("fixed_costs", r)}</div>`
         )
         .join("")}
       ${add("fixed_costs", this.t("add_cost"))}</div>`;
@@ -816,6 +845,11 @@ const STYLE = `
   .head-value { font-size: 14px; font-weight: 600; }
   .hint { font-size: 12px; color: var(--secondary-text-color); margin: -6px 0 6px 32px; }
   .footer .hint { margin: 0; flex-basis: 100%; }
+  .hint.flat { margin: 6px 0 0; }
+  .table.single .d-person { display: none; }
+  .table.single .drow { grid-template-areas: "name month" "paid year"; }
+  .table.single .dsum { grid-template-areas: "name month" ". year"; }
+  .erow.cost.single { grid-template-areas: "name name remove" "category amount amount" "freq freq freq"; }
 
   .blocks { display: flex; flex-direction: column; gap: 10px; }
   .block { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 10px;
@@ -908,6 +942,9 @@ const STYLE = `
     .dhead { display: grid; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--secondary-text-color); }
     .dhead > span { font-size: 11px; color: var(--secondary-text-color); }
     .dsum { grid-template-areas: "name person freq paid month year"; }
+    .table.single .drow, .table.single .dsum { grid-template-columns: minmax(0, 1fr) 130px 120px 100px 100px; grid-template-areas: "name freq paid month year"; }
+    .row2.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .erow.cost.single { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 160px 120px 40px; grid-template-areas: "name category freq amount remove"; }
     .narrow-only { display: none; }
     .wide-only { display: inline; }
     .erow.shared { grid-template-columns: minmax(0, 1fr) 160px 120px 40px; grid-template-areas: "name to amount remove"; }

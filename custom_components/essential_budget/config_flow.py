@@ -1,4 +1,4 @@
-"""Config flow: one budget per Home Assistant, with the names of the two persons."""
+"""Config flow: one budget per Home Assistant, with the name of one person and optionally a second one."""
 
 from __future__ import annotations
 
@@ -19,16 +19,16 @@ class EssentialBudgetConfigFlow(ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             names = {key: " ".join(str(user_input.get(key, "")).split()) for key in (CONF_PERSON_A, CONF_PERSON_B)}
+            if not names[CONF_PERSON_A]:
+                errors[CONF_PERSON_A] = "empty"
             for key, name in names.items():
-                if not name:
-                    errors[key] = "empty"
-                elif len(name) > MAX_PERSON_NAME:
+                if len(name) > MAX_PERSON_NAME:
                     errors[key] = "too_long"
             if not errors:
                 return self.async_create_entry(title="Essential Budget", data=names)
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema({vol.Required(CONF_PERSON_A): str, vol.Required(CONF_PERSON_B): str}),
+            data_schema=vol.Schema({vol.Required(CONF_PERSON_A): str, vol.Optional(CONF_PERSON_B, default=""): str}),
             errors=errors,
         )

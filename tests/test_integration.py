@@ -48,9 +48,9 @@ async def test_config_flow(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.FORM
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"person_a": " ", "person_b": "Sam"})
     assert result["errors"] == {"person_a": "empty"}
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"person_a": " Alex ", "person_b": "Sam"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"person_a": " Alex "})
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"] == {"person_a": "Alex", "person_b": "Sam"}
+    assert result["data"] == {"person_a": "Alex", "person_b": ""}  # second person is optional
     await hass.async_block_till_done()
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})

@@ -767,6 +767,7 @@ class EssentialBudgetCard extends HTMLElement {
     }
     if (field === "interval_months") {
       el.value = el.value.replace(/\D/g, "");
+      el.style.width = `${Math.max(1, el.value.length) + 0.4}ch`; // "N Monate" reads like the text of a select
       row.interval_months = el.value;
       if (el.classList.contains("invalid")) el.classList.toggle("invalid", !validInterval(el.value));
       // on leaving the field: 1, 3 or 12 months go back to the select
@@ -1037,7 +1038,7 @@ class EssentialBudgetCard extends HTMLElement {
       const options = INTERVALS.map((n) => `<option value="${n}" ${!row._custom && String(n) === String(row.interval_months) ? "selected" : ""}>${esc(this._freq(n))}</option>`).join("");
       if (row._custom)
         // the field "N Monate" keeps a small menu to go back to monthly, quarterly or yearly
-        return `<div class="field f-freq"><span class="money"><input type="text" inputmode="numeric" autocomplete="off" maxlength="3" aria-label="${esc(this.t("interval_label"))}" data-list="fixed_costs" data-id="${row._id}" data-field="interval_months" value="${esc(row.interval_months)}"><span class="cur" aria-hidden="true">${esc(this.t("months"))}</span><span class="freq-menu"><ha-icon icon="mdi:chevron-down"></ha-icon><select aria-label="${esc(this.t("frequency"))}" data-list="fixed_costs" data-id="${row._id}" data-field="interval_select">${options}<option value="custom" selected>${esc(this.t("freq_custom"))}</option></select></span></span></div>`;
+        return `<div class="field f-freq"><span class="money"><input type="text" inputmode="numeric" autocomplete="off" maxlength="3" aria-label="${esc(this.t("interval_label"))}" data-list="fixed_costs" data-id="${row._id}" data-field="interval_months" value="${esc(row.interval_months)}" style="width:${Math.max(1, String(row.interval_months).length) + 0.4}ch"><span class="months" aria-hidden="true">${esc(this.t("months"))}</span><span class="freq-menu"><ha-icon icon="mdi:chevron-down"></ha-icon><select aria-label="${esc(this.t("frequency"))}" data-list="fixed_costs" data-id="${row._id}" data-field="interval_select">${options}<option value="custom" selected>${esc(this.t("freq_custom"))}</option></select></span></span></div>`;
       return `<label class="field f-freq"><span class="sr">${esc(this.t("frequency"))}</span><select data-list="fixed_costs" data-id="${row._id}" data-field="interval_select">${options}<option value="custom">${esc(this.t("freq_custom"))}</option></select></label>`;
     };
     const remove = (list, row) =>
@@ -1422,7 +1423,10 @@ const STYLE = `
   .field input, .field select { font: inherit; font-size: 14px; color: var(--primary-text-color); height: 40px; box-sizing: border-box; min-width: 0;
     padding: 0 10px; border-radius: 8px; border: 1px solid var(--divider-color); background: var(--ha-card-background, var(--card-background-color)); }
   .field input:focus, .field select:focus { outline: 2px solid var(--primary-color); outline-offset: -1px; }
-  .field.f-amount input, .field.f-freq input { text-align: right; font-variant-numeric: tabular-nums; }
+  .field.f-amount input { text-align: right; font-variant-numeric: tabular-nums; }
+  /* "N Monate" looks like the text of the frequency select: same color, left aligned, menu at the right */
+  .field.f-freq .money input { flex: 0 0 auto; padding: 0 0 0 10px; box-sizing: content-box; text-align: left; }
+  .f-freq .months { flex: 1; min-width: 0; padding-left: 4px; font-size: 14px; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; }
   .field input.invalid { background: color-mix(in srgb, var(--error-color, #db4437) 18%, transparent); border-color: var(--error-color, #db4437); }
   .remove { width: 40px; height: 40px; }
   .toggle-space { width: 44px; flex-shrink: 0; }

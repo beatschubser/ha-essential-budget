@@ -948,7 +948,7 @@ class EssentialBudgetCard extends HTMLElement {
 
     const maxGroup = Math.max(...m.groups.map((g) => g.sum), 0);
     const categoryName = (g) => g.category || this.t("no_category");
-    const costs = `<div class="box">${this._section("mdi:receipt-text-outline", this.t("fixed_costs"), `${this._num(m.costTotal)} ${esc(this.t("per_month"))}`)}
+    const costs = `<div class="box">${this._section("mdi:receipt-text-outline", this.t("fixed_costs"))}
       ${m.groups
         .map((g) => {
           const open = g.items.length > 1 && this._open.has(g.category); // a single item needs no expanding

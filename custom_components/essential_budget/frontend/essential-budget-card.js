@@ -426,7 +426,12 @@ class EssentialBudgetCard extends HTMLElement {
         location.reload();
         return;
       case "reveal":
-        this._setRevealed(!this._revealed);
+        // privacy mode: show for a while; otherwise: hide until the page is reloaded
+        if (this._config.privacy) this._setRevealed(!this._revealed);
+        else {
+          this._hidden = !this._hidden;
+          this._render();
+        }
         return;
       case "toggle":
         this._open.has(key) ? this._open.delete(key) : this._open.add(key);
@@ -719,7 +724,8 @@ class EssentialBudgetCard extends HTMLElement {
       body = group ? this._renderDetail(model, group) : this._renderView(model);
     }
     this._root.lang = this._lang;
-    this._root.classList.toggle("private", !!this._config.privacy && !this._revealed && !this._draft);
+    const hidden = this._config.privacy ? !this._revealed : !!this._hidden;
+    this._root.classList.toggle("private", hidden && !this._draft);
     this._root.innerHTML = update + body;
   }
 
@@ -738,10 +744,9 @@ class EssentialBudgetCard extends HTMLElement {
       }</div>`;
     const negative = (v) => (v < 0 ? " negative" : "");
 
-    // privacy mode: tapping a key figure shows/hides all numbers
-    const reveal = this._config.privacy
-      ? ` data-action="reveal" role="button" tabindex="0" aria-pressed="${!!this._revealed}" title="${esc(this.t(this._revealed ? "hide_numbers" : "show_numbers"))}"`
-      : "";
+    // tapping a key figure shows/hides all numbers (privacy mode: shown for a while; else hidden until reload)
+    const shown = this._config.privacy ? !!this._revealed : !this._hidden;
+    const reveal = ` data-action="reveal" role="button" tabindex="0" aria-pressed="${shown}" title="${esc(this.t(shown ? "hide_numbers" : "show_numbers"))}"`;
     const kpis = `<div class="kpis">
       <div class="box kpi"${reveal}><span class="label">${esc(this.t("income"))}</span><span class="value">${this._num(m.incomeTotal)}</span><span class="sub">${esc(this.t("all_income"))}</span></div>
       <div class="box kpi"${reveal}><span class="label">${esc(this.t("fixed_costs"))}</span><span class="value">${this._num(m.costTotal)}</span><span class="sub">${this._withNum("of_income", "p", `${pct(m.costTotal, m.incomeTotal)} %`)}</span></div>
@@ -808,7 +813,7 @@ class EssentialBudgetCard extends HTMLElement {
       <div class="blocks">${grossPeople.map((p) => block(p.name, p.color, p.gross, null, grossLines(p))).join("")}</div></div>`;
     const left = income + (grossPeople.length ? gross : "") + (m.single ? "" : perPerson);
     const right = costs;
-    return `${this._header()}${kpis}<div class="columns"><div class="column">${left}</div><div class="column">${right}</div></div>`;
+    return `${this._header()}${kpis}<div class="columns"><div class="column">${left}</div><div class="column costs">${right}</div></div>`;
   }
 
   _renderDetail(m, g) {

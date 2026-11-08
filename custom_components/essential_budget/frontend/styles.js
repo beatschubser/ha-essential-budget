@@ -67,6 +67,8 @@ export const STYLE = `
   /* narrow: one column (income, annual gross, budget per person, fixed costs); wide: income left, costs right */
   .columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
   .column { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  /* narrow: fixed costs right below the key figures, then income, annual gross, budget per person */
+  .column.costs { order: -1; }
 
   .section-head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; }
   .section-head ha-icon { color: var(--primary-color); }
@@ -229,6 +231,7 @@ export const STYLE = `
     .kpi .value { font-size: 28px; }
     .kpi.small .value { font-size: 24px; }
     .columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .column.costs { order: 0; }
     .drow { grid-template-columns: minmax(0, 1fr) 140px 130px 120px 100px 100px; grid-template-areas: "name person freq paid month year"; padding: 10px 0; min-height: 28px; }
     .d-paid { text-align: right; font-size: 14px; }
     .d-freq { display: block; grid-area: freq; font-size: 14px; color: var(--secondary-text-color); }

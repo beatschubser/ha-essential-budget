@@ -41,6 +41,7 @@ export const STYLE = `
     background: color-mix(in srgb, var(--primary-color) 15%, transparent); color: var(--primary-text-color); }
 
   .header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+  .header .actions { display: flex; gap: 4px; margin-left: auto; color: var(--secondary-text-color); }
   .title { margin: 0; font-size: 20px; font-weight: 600; }
   .icon-btn { width: 44px; height: 44px; border: 0; background: transparent; border-radius: 50%; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center; color: var(--secondary-text-color); flex-shrink: 0; }

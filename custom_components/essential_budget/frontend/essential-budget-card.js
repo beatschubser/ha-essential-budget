@@ -14,6 +14,7 @@
 
 import { TEXTS } from "./texts.js";
 import { PANEL_STYLE, STYLE } from "./styles.js";
+import { buildXlsx } from "./xlsx.js";
 
 const VERSION = "0.2.5";
 const WS = "essential_budget";
@@ -418,6 +419,9 @@ class EssentialBudgetCard extends HTMLElement {
     if (!el) return;
     const { action, key, list, id } = el.dataset;
     switch (action) {
+      case "export":
+        this._export();
+        return;
       case "openedit":
         openEditPage(this);
         return;
@@ -729,8 +733,78 @@ class EssentialBudgetCard extends HTMLElement {
     this._root.innerHTML = update + body;
   }
 
-  _header() {
-    return this._config.title ? `<div class="header"><h1 class="title">${esc(this._config.title)}</h1></div>` : "";
+  /** Title (optional) and the buttons at the top right: Excel download and, for admins, the edit page. */
+  _header(actions = false) {
+    const buttons = actions
+      ? `<div class="actions"><button class="icon-btn" data-action="export" title="${esc(this.t("export"))}" aria-label="${esc(this.t("export"))}"><ha-icon icon="mdi:microsoft-excel"></ha-icon></button>${
+          this._isAdmin ? `<button class="icon-btn" data-action="openedit" title="${esc(this.t("edit_title"))}" aria-label="${esc(this.t("edit_title"))}"><ha-icon icon="mdi:cog-outline"></ha-icon></button>` : ""
+        }</div>`
+      : "";
+    if (!this._config.title && !buttons) return "";
+    return `<div class="header">${this._config.title ? `<h1 class="title">${esc(this._config.title)}</h1>` : "<span></span>"}${buttons}</div>`;
+  }
+
+  /** Excel file with one sheet for the income and one for the fixed costs (formulas for sums and monthly values). */
+  _export() {
+    const d = this._data;
+    const name = (p) => d.persons[p] || p;
+    const two = activePersons(d.persons).length > 1;
+    const money = (header) => ({ header, width: 16, money: true });
+    const sumCol = (col, from, to, rows, pick) => ({ f: `SUM(${col}${from}:${col}${to})`, v: rows.reduce((s, r) => s + (pick(r) || 0), 0) });
+
+    // income: person, type, name, gross per month, net per month, gross per year
+    const inc = [
+      ...d.income.map((i) => [name(i.person), this.t("xl_income"), i.name, i.gross ?? null, i.amount, null, i.gross ?? 0]),
+      ...d.special_payments.map((s) => [name(s.person), this.t("xl_special"), s.name, null, null, s.gross, 0]),
+      ...d.shared_income.map((s) => [name(s.to), this.t("xl_shared"), s.name, null, s.amount, null, 0]),
+    ];
+    const incRows = inc.map((r, i) => {
+      const row = r.slice(0, 6);
+      if (r[1] === this.t("xl_income") && r[3] !== null) row[5] = { f: `D${i + 2}*12`, v: r[3] * 12 };
+      return row;
+    });
+    const n = incRows.length + 1;
+    const incSum = [this.t("sum"), null, null, sumCol("D", 2, n, inc, (r) => r[3]), sumCol("E", 2, n, inc, (r) => r[4]),
+      sumCol("F", 2, n, inc, (r) => (r[1] === this.t("xl_income") ? (r[3] || 0) * 12 : r[5]))];
+    incSum.bold = true;
+
+    // fixed costs: category, name, person, amount per payment, every N months, per month, per year
+    const costs = [...d.fixed_costs].sort((a, b) => (a.category || "").localeCompare(b.category || "") || a.name.localeCompare(b.name));
+    const costRows = costs.map((c, i) => {
+      const r = i + 2;
+      const row = [c.category || this.t("no_category"), c.name, name(c.person), c.amount, c.interval_months,
+        { f: `D${r}/E${r}`, v: c.amount / c.interval_months }, { f: `F${r}*12`, v: (c.amount / c.interval_months) * 12 }];
+      return two ? row : row.filter((_, k) => k !== 2);
+    });
+    const m = costRows.length + 1;
+    const monthlyTotal = costs.reduce((s, c) => s + c.amount / c.interval_months, 0);
+    const [colM, colY] = two ? ["F", "G"] : ["E", "F"];
+    const costSum = [this.t("sum"), null, ...(two ? [null] : []), null, null,
+      { f: `SUM(${colM}2:${colM}${m})`, v: monthlyTotal }, { f: `SUM(${colY}2:${colY}${m})`, v: monthlyTotal * 12 }];
+    costSum.bold = true;
+    // monthly and yearly formulas refer to the right columns when there is no person column
+    if (!two) costRows.forEach((row, i) => {
+      row[4] = { f: `C${i + 2}/D${i + 2}`, v: row[4].v };
+      row[5] = { f: `E${i + 2}*12`, v: row[5].v };
+    });
+
+    const blob = buildXlsx([
+      { name: this.t("income_edit"), columns: [
+        { header: this.t("person"), width: 16 }, { header: this.t("xl_type"), width: 22 }, { header: this.t("name"), width: 28 },
+        money(this.t("gross_month")), money(this.t("net_month")), money(this.t("gross_year"))],
+        rows: [...incRows, incSum] },
+      { name: this.t("fixed_costs"), columns: [
+        { header: this.t("category"), width: 20 }, { header: this.t("name"), width: 28 }, ...(two ? [{ header: this.t("person"), width: 16 }] : []),
+        money(this.t("per_payment")), { header: this.t("every_months"), width: 14 }, money(this.t("month")), money(this.t("year"))],
+        rows: [...costRows, costSum] },
+    ], this._currencySymbol);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${this.t("xl_file")} ${new Date().toISOString().slice(0, 10)}.xlsx`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   }
 
   _section(icon, title, right = "", extra = "") {
@@ -813,7 +887,7 @@ class EssentialBudgetCard extends HTMLElement {
       <div class="blocks">${grossPeople.map((p) => block(p.name, p.color, p.gross, null, grossLines(p))).join("")}</div></div>`;
     const left = income + (grossPeople.length ? gross : "") + (m.single ? "" : perPerson);
     const right = costs;
-    return `${this._header()}${kpis}<div class="columns"><div class="column">${left}</div><div class="column costs">${right}</div></div>`;
+    return `${this._header(true)}${kpis}<div class="columns"><div class="column">${left}</div><div class="column costs">${right}</div></div>`;
   }
 
   _renderDetail(m, g) {

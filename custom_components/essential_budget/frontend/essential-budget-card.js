@@ -219,12 +219,6 @@ class EssentialBudgetCard extends HTMLElement {
     this._root.addEventListener("input", (e) => this._onInput(e));
     this._root.addEventListener("change", (e) => this._onInput(e));
     this._root.addEventListener("focusout", (e) => this._onBlur(e));
-    this._root.addEventListener("keydown", (e) => {
-      if ((e.key === "Enter" || e.key === " ") && e.target.dataset?.action === "reveal") {
-        e.preventDefault();
-        e.target.click();
-      }
-    });
     // privacy mode: hide the numbers again as soon as the app or browser tab goes to the background
     this._onVisibility = () => document.hidden && this._setRevealed(false);
     this._config = {};
@@ -733,15 +727,22 @@ class EssentialBudgetCard extends HTMLElement {
     this._root.innerHTML = update + body;
   }
 
-  /** Title (optional) and the buttons at the top right: Excel download and, for admins, the edit page. */
+  /**
+   * Title (optional) and the buttons: show/hide numbers (left on wide cards), Excel download and,
+   * for admins, the edit page (right).
+   */
   _header(actions = false) {
+    const shown = this._config.privacy ? !!this._revealed : !this._hidden;
+    const eye = actions
+      ? `<button class="icon-btn eye" data-action="reveal" aria-pressed="${!shown}" title="${esc(this.t(shown ? "hide_numbers" : "show_numbers"))}" aria-label="${esc(this.t(shown ? "hide_numbers" : "show_numbers"))}"><ha-icon icon="${shown ? "mdi:eye-off-outline" : "mdi:eye-outline"}"></ha-icon></button>`
+      : "";
     const buttons = actions
       ? `<div class="actions"><button class="icon-btn" data-action="export" title="${esc(this.t("export"))}" aria-label="${esc(this.t("export"))}"><ha-icon icon="mdi:microsoft-excel"></ha-icon></button>${
           this._isAdmin ? `<button class="icon-btn" data-action="openedit" title="${esc(this.t("edit_title"))}" aria-label="${esc(this.t("edit_title"))}"><ha-icon icon="mdi:cog-outline"></ha-icon></button>` : ""
         }</div>`
       : "";
     if (!this._config.title && !buttons) return "";
-    return `<div class="header">${this._config.title ? `<h1 class="title">${esc(this._config.title)}</h1>` : "<span></span>"}${buttons}</div>`;
+    return `<div class="header">${eye}${this._config.title ? `<h1 class="title">${esc(this._config.title)}</h1>` : ""}${buttons}</div>`;
   }
 
   /** Excel file with one sheet for the income and one for the fixed costs (formulas for sums and monthly values). */
@@ -818,13 +819,10 @@ class EssentialBudgetCard extends HTMLElement {
       }</div>`;
     const negative = (v) => (v < 0 ? " negative" : "");
 
-    // tapping a key figure shows/hides all numbers (privacy mode: shown for a while; else hidden until reload)
-    const shown = this._config.privacy ? !!this._revealed : !this._hidden;
-    const reveal = ` data-action="reveal" role="button" tabindex="0" aria-pressed="${shown}" title="${esc(this.t(shown ? "hide_numbers" : "show_numbers"))}"`;
     const kpis = `<div class="kpis">
-      <div class="box kpi"${reveal}><span class="label">${esc(this.t("income"))}</span><span class="value">${this._num(m.incomeTotal)}</span><span class="sub">${esc(this.t("all_income"))}</span></div>
-      <div class="box kpi"${reveal}><span class="label">${esc(this.t("fixed_costs"))}</span><span class="value">${this._num(m.costTotal)}</span><span class="sub">${this._withNum("of_income", "p", `${pct(m.costTotal, m.incomeTotal)} %`)}</span></div>
-      <div class="box kpi main ${m.budget < 0 ? "negative" : "positive"}"${reveal}><span class="label">${esc(this.t("budget"))}</span><span class="value">${this._num(m.budget)}</span><span class="sub">${esc(this.t("after_costs"))}</span></div>
+      <div class="box kpi"><span class="label">${esc(this.t("income"))}</span><span class="value">${this._num(m.incomeTotal)}</span><span class="sub">${esc(this.t("all_income"))}</span></div>
+      <div class="box kpi"><span class="label">${esc(this.t("fixed_costs"))}</span><span class="value">${this._num(m.costTotal)}</span><span class="sub">${this._withNum("of_income", "p", `${pct(m.costTotal, m.incomeTotal)} %`)}</span></div>
+      <div class="box kpi main ${m.budget < 0 ? "negative" : "positive"}"><span class="label">${esc(this.t("budget"))}</span><span class="value">${this._num(m.budget)}</span><span class="sub">${esc(this.t("after_costs"))}</span></div>
     </div>`;
 
     const lines = (items) =>

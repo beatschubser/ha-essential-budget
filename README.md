@@ -16,7 +16,8 @@ A static household budget for Home Assistant, for one or two persons: monthly ne
 - **Annual gross** in its own box, per person: 12 × the monthly gross of the income + the gross of the special payments
 - **Own edit page:** income and fixed costs are edited on their own page, the card on the dashboard only shows the budget (administrators only, no sidebar entry)
 - **Excel export:** the Excel icon at the top right of the card downloads the income and the fixed costs as an Excel file (two sheets, with sums and formulas); the gear next to it opens the edit page (administrators only)
-- **Privacy mode** (optional): all numbers are blurred until you tap one of the key figures; they are hidden again after a set time (default 30 seconds), when the app or browser tab goes to the background and when you tap again. Without the privacy mode, tapping a key figure hides the numbers until the page is reloaded
+- **Show/hide numbers:** the eye icon at the top of the card blurs all numbers until it is tapped again or the page is reloaded
+- **Privacy mode** (optional): the numbers start hidden; after tapping the eye icon they are hidden again after a set time (default 30 seconds), when the app or browser tab goes to the background and when you tap again
 - Desktop layout on wide cards (income, annual gross and free budget per person on the left, fixed costs on the right), one column on phones; follows the colors of your theme
 - English and German; amounts stored with cents and shown in whole units of the currency set in Home Assistant (Settings > System > General)
 
@@ -31,7 +32,7 @@ The card is registered automatically. Add it to a dashboard with **Add card > Es
 ```yaml
 type: custom:essential-budget-card
 title: Budget          # optional
-privacy: true          # optional: numbers blurred until a key figure is tapped
+privacy: true          # optional: numbers hidden until the eye icon is tapped
 privacy_seconds: 60    # optional: hide the numbers again after (default 30)
 ```
 

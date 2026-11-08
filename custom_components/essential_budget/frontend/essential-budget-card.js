@@ -15,7 +15,7 @@
 import { TEXTS } from "./texts.js";
 import { PANEL_STYLE, STYLE } from "./styles.js";
 
-const VERSION = "0.2.4";
+const VERSION = "0.2.5";
 const WS = "essential_budget";
 const PERSONS = ["a", "b"];
 const PERSON_COLORS = { a: "#2f6fde", b: "#d9822b", shared: "#7a8794" }; // defaults; persons can get own colors in the edit mode

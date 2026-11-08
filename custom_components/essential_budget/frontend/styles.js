@@ -42,10 +42,10 @@ export const STYLE = `
 
   .header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
   .header .actions { display: flex; gap: 4px; color: var(--secondary-text-color); }
-  /* show/hide numbers: with the other buttons on the right on narrow cards, alone on the left on wide ones */
-  .header .title { order: 0; }
-  .header .eye { order: 1; margin-left: auto; color: var(--secondary-text-color); }
-  .header .actions { order: 2; }
+  /* show/hide numbers on the left, the other buttons on the right */
+  .header .eye { color: var(--secondary-text-color); }
+  .header .title { margin-right: auto; }
+  .header .eye + .actions { margin-left: auto; }
   .title { margin: 0; font-size: 20px; font-weight: 600; }
   .icon-btn { width: 44px; height: 44px; border: 0; background: transparent; border-radius: 50%; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center; color: var(--secondary-text-color); flex-shrink: 0; }
@@ -234,9 +234,6 @@ export const STYLE = `
     .kpi .value { font-size: 28px; }
     .kpi.small .value { font-size: 24px; }
     .columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .header .eye { order: -1; margin-left: -10px; margin-right: 0; }
-    .header .title { margin-right: auto; }
-    .header .eye + .actions { margin-left: auto; }
     .column.costs { order: 0; }
     .drow { grid-template-columns: minmax(0, 1fr) 140px 130px 120px 100px 100px; grid-template-areas: "name person freq paid month year"; padding: 10px 0; min-height: 28px; }
     .d-paid { text-align: right; font-size: 14px; }

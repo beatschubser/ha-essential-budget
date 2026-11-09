@@ -2,6 +2,8 @@
 
 A static household budget for Home Assistant, for one or two persons: monthly net income, joint income, fixed costs by category and what is left per month, plus yearly values like the annual gross. No bank connection and no expense tracking: you enter your fixed values once and keep them up to date.
 
+![Essential Budget card on a notebook (example data)](assets/notebook-light.png)
+
 > **Beta.** This integration is new; please report problems in the [issues](https://github.com/beatschubser/ha-essential-budget/issues).
 
 ## Features

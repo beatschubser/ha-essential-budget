@@ -16,7 +16,7 @@ export const PANEL_STYLE = `
 `;
 
 export const STYLE = `
-  :host { display: block; }
+  :host { display: block; scroll-margin-top: calc(var(--header-height, 56px) + 8px); }
   ha-card { background: none; border: none; box-shadow: none; overflow: visible; }
   .root { container-type: inline-size; display: flex; flex-direction: column; gap: 12px; color: var(--primary-text-color); }
   .box {

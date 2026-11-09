@@ -436,10 +436,20 @@ class EssentialBudgetCard extends HTMLElement {
         break;
       case "detail":
         this._detail = key;
-        break;
-      case "back":
+        this._render();
+        // the detail view always starts at its top (on phones the page may be scrolled down)
+        if (this.getBoundingClientRect().top < 0) this.scrollIntoView({ block: "start" });
+        return;
+      case "back": {
+        const cat = this._detail;
         this._detail = null;
-        break;
+        this._render();
+        // back at the category the detail view was opened from
+        const row = this._root.querySelector(`[data-action="detail"][data-key="${CSS.escape(cat ?? "")}"]`);
+        const r = row?.getBoundingClientRect();
+        if (r && (r.top < 0 || r.bottom > window.innerHeight)) row.scrollIntoView({ block: "center" });
+        return;
+      }
       case "cancel":
         // discard: start again from the saved budget (the edit mode stays open)
         this._draft = null;

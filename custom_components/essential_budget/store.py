@@ -1,4 +1,4 @@
-"""The budget file /config/.storage/essential_budget.json: read at startup, written on every save from the card."""
+"""The budget file /config/.storage/essential_budget.json: read at startup, written on every save on the edit page."""
 
 from __future__ import annotations
 

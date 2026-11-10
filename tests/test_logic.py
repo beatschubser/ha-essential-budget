@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "custom_components" / "essential_budget"))
 
-from logic import BudgetError, default_data, validate  # noqa: E402
+from logic import BudgetError, default_data, validate
 
 SAMPLE = {
     "persons": {"a": "  Alex ", "b": "Sam"},

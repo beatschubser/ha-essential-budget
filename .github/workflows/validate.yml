@@ -12,28 +12,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: home-assistant/actions/hassfest@master
+      - uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361  # master on 2026-11-09
 
-  tests:
-    name: Logic tests
+  code:
+    name: Code style and logic tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - run: python3 tests/test_logic.py
-      - name: Check card syntax
-        # the files are ES modules: checked as .mjs
-        run: for f in custom_components/essential_budget/frontend/*.js; do cp "$f" /tmp/check.mjs && node --check /tmp/check.mjs || exit 1; done
-      - name: Check version consistency
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Python style (ruff)
         run: |
-          base=custom_components/essential_budget
-          m=$(jq -r .version "$base/manifest.json")
-          p=$(sed -nE 's/^VERSION = "([^"]+)".*/\1/p' "$base/const.py")
-          c=$(sed -nE 's/^const VERSION = "([^"]+)".*/\1/p' "$base/frontend/essential-budget-card.js")
-          echo "manifest=$m const.py=$p card=$c"
-          [ "$m" = "$p" ] && [ "$m" = "$c" ] || { echo "::error::Version mismatch, use scripts/bump_version.py"; exit 1; }
+          pip install ruff==0.16.9
+          ruff check .
+          ruff format --check .
+      - name: JavaScript style (prettier)
+        run: npx --yes prettier@3.6.2 --check "custom_components/**/*.js" "tests/js/*.js"
+      - name: Python logic tests
+        run: python3 tests/test_logic.py
+      - name: JavaScript tests
+        run: npm test
 
   pytest:
     name: Home Assistant tests
@@ -54,12 +56,10 @@ jobs:
           set -o pipefail
           pytest -v --tb=short 2>&1 | tee pytest.log
       - name: Test results as annotation
-        # the job log is not always reachable, the annotation is (notice when passed, error when failed)
         if: always()
         run: |
           [ -f pytest.log ] || exit 0
-          level=$([ "${{ job.status }}" = "success" ] && echo notice || echo error)
-          python3 -c "import sys; t = open('pytest.log').read(); t = t[-8000:] if sys.argv[1] == 'error' else '\n'.join(l for l in t.splitlines() if ' PASSED' in l or ' FAILED' in l or 'passed' in l); print('::' + sys.argv[1] + ' title=pytest::' + t.replace('%', '%25').replace('\r', '').replace('\n', '%0A'))" "$level"
+          python3 scripts/pytest_annotation.py pytest.log "$([ "${{ job.status }}" = "success" ] && echo notice || echo error)"
 
   hacs:
     name: HACS
@@ -67,6 +67,6 @@ jobs:
     if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
-      - uses: hacs/action@main
+      - uses: hacs/action@22.5.0
         with:
           category: integration

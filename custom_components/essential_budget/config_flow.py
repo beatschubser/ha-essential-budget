@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import voluptuous as vol
-
 from homeassistant.config_entries import ConfigFlow
 
 from .const import CONF_PERSON_A, CONF_PERSON_B, DOMAIN
-from .logic import MAX_PERSON_NAME
+from .logic import MAX_PERSON_NAME, clean_name
 
 
 class EssentialBudgetConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -18,7 +17,7 @@ class EssentialBudgetConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="single_instance_allowed")
         errors = {}
         if user_input is not None:
-            names = {key: " ".join(str(user_input.get(key, "")).split()) for key in (CONF_PERSON_A, CONF_PERSON_B)}
+            names = {key: clean_name(str(user_input.get(key, ""))) for key in (CONF_PERSON_A, CONF_PERSON_B)}
             if not names[CONF_PERSON_A]:
                 errors[CONF_PERSON_A] = "empty"
             for key, name in names.items():

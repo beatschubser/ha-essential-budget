@@ -4,8 +4,6 @@ A static household budget for Home Assistant, for one or two persons: monthly ne
 
 ![Essential Budget card on a notebook (example data)](assets/notebook-light.png)
 
-> **Beta.** This integration is new; please report problems in the [issues](https://github.com/beatschubser/ha-essential-budget/issues).
-
 ## Features
 
 - **Key figures:** monthly net income, fixed costs (with their share of the income) and the free budget after fixed costs, per month (green when positive, red when negative)
@@ -25,6 +23,8 @@ A static household budget for Home Assistant, for one or two persons: monthly ne
 
 ## Installation
 
+Requires Home Assistant 2025.2 or newer.
+
 1. HACS > three dots > **Custom repositories** > add `https://github.com/beatschubser/ha-essential-budget` as type **Integration**
 2. Install **Essential Budget** and restart Home Assistant
 3. **Settings > Devices & services > Add integration > Essential Budget** and enter the name of the person and, optionally, of a second one
@@ -40,6 +40,7 @@ privacy_seconds: 60    # optional: hide the numbers again after (default 30)
 
 To enter or change the budget, open the edit page in one of these ways:
 
+- the gear icon at the top right of the card
 - **Settings > Devices & services > Essential Budget >** gear icon (**Configure**) next to the entry
 - in the dashboard editor, open the card and choose **Edit budget** below the card options
 - directly at `/essential-budget` (e.g. as a bookmark)

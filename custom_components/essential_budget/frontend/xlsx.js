@@ -9,7 +9,8 @@
 
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-const colName = (i) => {
+/** Column name for an index: 0 = A, 25 = Z, 26 = AA. */
+export const colName = (i) => {
   let s = "";
   for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
   return s;
@@ -45,7 +46,10 @@ const files = (sheets, currency) => {
   const out = {
     "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets
-      .map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`)
+      .map(
+        (_, i) =>
+          `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
+      )
       .join("")}</Types>`,
     "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
@@ -55,8 +59,13 @@ const files = (sheets, currency) => {
       .join("")}</sheets><calcPr calcId="0" fullCalcOnLoad="1"/></workbook>`,
     "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets
-      .map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`)
-      .join("")}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+      .map(
+        (_, i) =>
+          `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`,
+      )
+      .join(
+        "",
+      )}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
     "xl/styles.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="${fmt}"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`,
   };
@@ -78,35 +87,64 @@ const crc32 = (bytes) => {
   return (c ^ 0xffffffff) >>> 0;
 };
 
+/** A binary record of the ZIP format: fields as [value, bytes] in their order, little endian. */
+const record = (fields) => {
+  const view = new DataView(new ArrayBuffer(fields.reduce((size, [, bytes]) => size + bytes, 0)));
+  let pos = 0;
+  for (const [value, bytes] of fields) {
+    if (bytes === 4) view.setUint32(pos, value, true);
+    else view.setUint16(pos, value, true);
+    pos += bytes;
+  }
+  return view;
+};
+
+const ZIP_VERSION = 20; // 2.0: the lowest version that knows folders
+const UTF8_NAMES = 0x0800;
+const STORED = 0; // no compression
+
 const zip = (entries) => {
   const enc = new TextEncoder();
   const parts = [];
   const central = [];
   let offset = 0;
-  const d = new Date();
-  const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
-  const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  const now = new Date();
+  const time = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const date = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
   for (const [name, text] of Object.entries(entries)) {
     const data = enc.encode(text);
     const nameBytes = enc.encode(name);
-    const crc = crc32(data);
-    const head = new DataView(new ArrayBuffer(30));
-    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, time, 2], [12, date, 2], [14, crc, 4],
-      [18, data.length, 4], [22, data.length, 4], [26, nameBytes.length, 2], [28, 0, 2]]
-      .forEach(([pos, v, size]) => (size === 4 ? head.setUint32(pos, v, true) : head.setUint16(pos, v, true)));
-    const dir = new DataView(new ArrayBuffer(46));
-    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, time, 2], [14, date, 2], [16, crc, 4],
-      [20, data.length, 4], [24, data.length, 4], [28, nameBytes.length, 2], [30, 0, 2], [32, 0, 2], [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, offset, 4]]
-      .forEach(([pos, v, size]) => (size === 4 ? dir.setUint32(pos, v, true) : dir.setUint16(pos, v, true)));
-    parts.push(head, nameBytes, data);
-    central.push(dir, nameBytes);
-    offset += 30 + nameBytes.length + data.length;
+    // shared by the header in front of the file and its entry in the central directory
+    const common = [
+      [UTF8_NAMES, 2],
+      [STORED, 2],
+      [time, 2],
+      [date, 2],
+      [crc32(data), 4],
+      [data.length, 4],
+      [data.length, 4],
+      [nameBytes.length, 2],
+      [0, 2],
+    ];
+    const header = record([[0x04034b50, 4], [ZIP_VERSION, 2], ...common]);
+    // after the common part: comment length, disk number, internal and external attributes, position of the header
+    const entry = record([[0x02014b50, 4], [ZIP_VERSION, 2], [ZIP_VERSION, 2], ...common, [0, 2], [0, 2], [0, 2], [0, 4], [offset, 4]]);
+    parts.push(header, nameBytes, data);
+    central.push(entry, nameBytes);
+    offset += header.byteLength + nameBytes.length + data.length;
   }
-  const size = central.reduce((s, p) => s + p.byteLength, 0);
-  const end = new DataView(new ArrayBuffer(22));
   const count = Object.keys(entries).length;
-  [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, count, 2], [10, count, 2], [12, size, 4], [16, offset, 4], [20, 0, 2]]
-    .forEach(([pos, v, s]) => (s === 4 ? end.setUint32(pos, v, true) : end.setUint16(pos, v, true)));
+  const centralSize = central.reduce((size, part) => size + part.byteLength, 0);
+  const end = record([
+    [0x06054b50, 4],
+    [0, 2],
+    [0, 2],
+    [count, 2],
+    [count, 2],
+    [centralSize, 4],
+    [offset, 4],
+    [0, 2],
+  ]);
   return new Blob([...parts, ...central, end], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 };
 

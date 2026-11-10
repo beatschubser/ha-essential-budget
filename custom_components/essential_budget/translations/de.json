@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Essential Budget einrichten",
-        "description": "Trag die Namen der Personen ein, denen das Budget gehört; für das Budget einer einzelnen Person bleibt der zweite Name leer. Einnahmen und Fixkosten bearbeitest du danach in der Budget-Karte. Die Daten liegen in .storage/essential_budget.json im config-Ordner.",
+        "description": "Trag die Namen der Personen ein, denen das Budget gehört; für das Budget einer einzelnen Person bleibt der zweite Name leer. Einnahmen und Fixkosten bearbeitest du danach auf der Bearbeitungsseite (Zahnrad in der Budget-Karte oder am Eintrag der Integration). Die Daten liegen in .storage/essential_budget.json im config-Ordner.",
         "data": {
           "person_a": "Person",
           "person_b": "Zweite Person (optional)"

@@ -6,14 +6,18 @@ import json
 from pathlib import Path
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.setup import async_setup_component
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.essential_budget.const import DATA_FILE, DOMAIN, ISSUE_INVALID_FILE, VERSION
+from custom_components.essential_budget.const import DATA_FILE, DOMAIN, EDIT_PAGE_ELEMENT, EDIT_PATH, ISSUE_INVALID_FILE
+from custom_components.essential_budget.logic import LIMITS
+
+MANIFEST = Path(__file__).parent.parent / "custom_components" / DOMAIN / "manifest.json"
+FRONTEND = MANIFEST.parent / "frontend"
 
 BUDGET = {
     "persons": {"a": "Alex", "b": "Sam"},
@@ -65,7 +69,9 @@ async def test_file_created_and_saved(hass: HomeAssistant, hass_ws_client) -> No
 
     client = await hass_ws_client(hass)
     await client.send_json_auto_id({"type": f"{DOMAIN}/version"})
-    assert (await client.receive_json())["result"] == {"version": VERSION}
+    # the version comes from manifest.json, the only place where it is set
+    version = json.loads(MANIFEST.read_text(encoding="utf-8"))["version"]
+    assert (await client.receive_json())["result"] == {"version": version, "edit_path": f"/{EDIT_PATH}", "limits": LIMITS}
 
     await client.send_json_auto_id({"type": f"{DOMAIN}/subscribe"})
     assert (await client.receive_json())["success"]
@@ -107,7 +113,7 @@ async def test_broken_file_blocks_saving(hass: HomeAssistant, hass_ws_client) ->
     client = await hass_ws_client(hass)
     await client.send_json_auto_id({"type": f"{DOMAIN}/get"})
     result = await client.receive_json()
-    assert result["error"]["code"] == "invalid_file"
+    assert result["error"]["code"] == ISSUE_INVALID_FILE
 
     await client.send_json_auto_id({"type": f"{DOMAIN}/save", "data": BUDGET})
     assert not (await client.receive_json())["success"]
@@ -125,10 +131,11 @@ async def test_save_needs_admin(hass: HomeAssistant, hass_ws_client, hass_read_o
 async def test_edit_page_registered(hass: HomeAssistant) -> None:
     """The edit page is registered for admins only and without a sidebar entry."""
     await setup(hass)
-    panel = hass.data["frontend_panels"]["essential-budget"]
+    panel = hass.data["frontend_panels"][EDIT_PATH]
     assert panel.require_admin
     assert panel.sidebar_title is None
-    assert panel.config["_panel_custom"]["name"] == "essential-budget-panel"
+    assert panel.config["_panel_custom"]["name"] == EDIT_PAGE_ELEMENT
+    assert panel.config["_panel_custom"]["module_url"].endswith("?v=" + json.loads(MANIFEST.read_text(encoding="utf-8"))["version"])
     assert panel.config_panel_domain == DOMAIN
 
 
@@ -136,6 +143,17 @@ async def test_frontend_files_served(hass: HomeAssistant, hass_client_no_auth) -
     """The card and its modules are served."""
     await setup(hass)
     client = await hass_client_no_auth()
-    for name in ("essential-budget-card.js", "texts.js", "styles.js"):
+    names = [file.name for file in FRONTEND.glob("*.js")]
+    assert "essential-budget-card.js" in names
+    for name in names:
         assert (await client.get(f"/essential_budget_files/{name}")).status == 200
     assert (await client.get("/essential_budget_files/missing.js")).status == 404
+
+
+async def test_not_set_up(hass: HomeAssistant, hass_ws_client) -> None:
+    """Without a config entry the commands answer with "not found" (the card then shows a hint)."""
+    assert await async_setup_component(hass, DOMAIN, {})
+    client = await hass_ws_client(hass)
+    for command in ({"type": f"{DOMAIN}/get"}, {"type": f"{DOMAIN}/save", "data": BUDGET}):
+        await client.send_json_auto_id(command)
+        assert (await client.receive_json())["error"]["code"] == "not_found"

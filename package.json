@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"tests/js/*.test.js\"",
+    "format": "prettier --write \"custom_components/**/*.js\" \"tests/js/*.js\"",
+    "format:check": "prettier --check \"custom_components/**/*.js\" \"tests/js/*.js\""
+  }
+}

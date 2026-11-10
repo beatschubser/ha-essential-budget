@@ -20,6 +20,7 @@ assets/mockups/
 assets/icon-source.png
 scripts/render_mockups.py
 
-# Local test data
-essential_budget.json
+# Local test artifacts
 .pytest_cache/
+.ruff_cache/
+node_modules/

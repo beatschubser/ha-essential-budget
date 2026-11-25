@@ -233,8 +233,11 @@ export const EDIT_STYLE = `
   .freq-menu select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 
   /* Person: like the chip of the view */
-  select.in.chip { margin: 0; height: 24px; padding: 0 4px 0 8px; border-radius: 12px; font-size: 12px; font-weight: 600; color: var(--primary-text-color);
-    background: color-mix(in srgb, var(--c) 16%, transparent); box-shadow: inset 0 0 0 1px var(--c); border: 0; background-image: none; }
+  /* own chevron with room at the right (the native arrow of Safari sits right at the edge) */
+  select.in.chip { appearance: none; margin: 0; height: 24px; padding: 0 22px 0 10px; border-radius: 12px; font-size: 12px; font-weight: 600;
+    color: var(--primary-text-color); background-color: color-mix(in srgb, var(--c) 16%, transparent); box-shadow: inset 0 0 0 1px var(--c); border: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23888' d='M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-size: 14px; background-position: right 6px center; }
 
   .tiny { width: 28px; height: 28px; }
   .tiny ha-icon { --mdc-icon-size: 18px; }

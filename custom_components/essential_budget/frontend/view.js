@@ -236,7 +236,7 @@ const renderUpcoming = (m, ctx) => {
   const { t, upcoming } = ctx;
   if (!upcoming) return "";
   const all = `<button class="add" data-action="schedule"><ha-icon icon="mdi:calendar-month-outline"></ha-icon>${esc(t("show_schedule"))}</button>`;
-  return `<div class="box">${sectionHead("mdi:calendar-arrow-right", t("upcoming"), debitsTotal(ctx, upcoming.items), t("next_days", { n: upcoming.days }))}
+  return `<div class="box">${sectionHead("mdi:calendar-arrow-right", t("upcoming"), debitsTotal(ctx, upcoming.items))}
     ${debitRows(upcoming.items, m, ctx)}${all}</div>`;
 };
 

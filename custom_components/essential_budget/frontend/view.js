@@ -172,6 +172,7 @@ export const renderDetail = (m, g, ctx) => {
   return `<div class="detail-head">
       ${iconButton({ action: "back", icon: "mdi:arrow-left", label: t("back"), cls: "round" })}
       <span class="dot square" style="background:${g.color}"></span><h1 class="title grow">${esc(categoryLabel(g.category, t))}</h1>
+      ${ctx.isAdmin ? iconButton({ action: "edit", icon: "mdi:pencil", label: t("edit_title") }) : ""}
     </div>
     <div class="kpis detail">${tile(t("per_month"), money(ctx, g.sum))}${tile(t("per_year"), money(ctx, g.sum * 12))}${tile(t("share"), percent(g.sum, m.costTotal))}</div>
     <div class="box table ${m.single ? "single" : ""}">
@@ -241,7 +242,7 @@ const renderUpcoming = (m, ctx) => {
   const { t, upcoming } = ctx;
   if (!upcoming) return "";
   const all = `<button class="add" data-action="schedule"><ha-icon icon="mdi:calendar-month-outline"></ha-icon>${esc(t("show_schedule"))}</button>`;
-  return `<div class="box">${sectionHead("mdi:calendar-arrow-right", t("upcoming"), debitsTotal(ctx, upcoming.items))}
+  return `<div class="box">${sectionHead("mdi:calendar-arrow-right", t("upcoming"))}
     ${debitRows(upcoming.items, m, ctx)}${all}</div>`;
 };
 

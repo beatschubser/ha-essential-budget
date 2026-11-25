@@ -211,21 +211,23 @@ const annualGrossBox = (draft, ctx) => {
     <div class="blocks">${blocks.join("")}</div></div>`;
 };
 
-/* ---------- Fixed costs: the categories (rename, delete, open to edit their entries) ---------- */
+/* ---------- Fixed costs: the categories (open to rename them and edit their entries, delete) ---------- */
 
 const categoryRow = (category, draft, ctx) => {
   const { t, model } = ctx;
   const group = model.groups.find((g) => g.category === category);
   const count = costsOfCategory(draft, category).length;
-  const name = `<input type="text" data-bind="category-name" data-key="${esc(category)}" value="${esc(category)}" placeholder="${esc(t("no_category"))}" aria-label="${esc(t("rename_category"))}"${maxLength(ctx.limits.category)}>`;
+  const label = categoryLabel(category, t);
   const question = confirming(ctx, "category", category)
     ? confirmBox(t("delete_category_confirm", { c: categoryLabel(category, t), n: count }), ctx)
     : "";
   return `<div class="ecat">
-    <span class="dot" style="background:${group?.color || JOINT_COLOR}"></span>
-    <span class="field">${name}</span>
-    <span class="cat-value">${live(money(ctx, group?.sum || 0))}</span>
-    ${iconButton({ action: "detail", icon: "mdi:pencil", label: t("edit_entries", { c: categoryLabel(category, t) }), data: { key: category } })}
+    <button class="cat-btn" data-action="detail" data-key="${esc(category)}" aria-label="${esc(t("edit_entries", { c: label }))}">
+      <span class="dot" style="background:${group?.color || JOINT_COLOR}"></span>
+      <span class="ellipsis strong grow">${esc(label)}</span>
+      <span class="cat-value">${live(money(ctx, group?.sum || 0))}</span>
+      <ha-icon class="muted" icon="mdi:chevron-right"></ha-icon>
+    </button>
     ${iconButton({ action: "deletecategory", icon: "mdi:delete-outline", label: t("delete_category"), data: { key: category } })}
   </div>${question}`;
 };

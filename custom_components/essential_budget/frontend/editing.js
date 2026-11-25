@@ -39,9 +39,9 @@ export const startEditing = (card) => {
   card._openPage();
 };
 
+/** Back to the view, at the category that was open (if it still exists). */
 const stopEditing = (card) => {
   card._draft = null;
-  card._detail = null;
   card._openPage();
 };
 

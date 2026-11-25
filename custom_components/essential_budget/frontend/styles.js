@@ -223,10 +223,10 @@ export const EDIT_STYLE = `
   .btn.danger { background: var(--eb-error); border-color: var(--eb-error); color: #fff; }
 
   /* Categories while editing: name, sum, edit entries, delete */
-  .ecat { display: flex; align-items: center; gap: 8px; min-height: 52px; border-top: 1px solid var(--eb-line); }
-  .ecat .field { flex: 1; }
+  .ecat { display: flex; align-items: center; gap: 4px; min-height: 52px; border-top: 1px solid var(--eb-line); }
+  .ecat .cat-btn { padding: 0 4px 0 8px; font-size: 14px; }
   .ecat .cat-value { width: auto; min-width: 48px; }
-  .ecat .icon-btn { width: 36px; height: 36px; }
+  .ecat .icon-btn { width: 40px; height: 40px; }
   .title-input { font-size: 18px !important; font-weight: 600; }
 
   /* Unsaved changes from before */

@@ -3,17 +3,19 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import {
+  LIST_COSTS,
   SCHEMA,
-  TAB_COSTS,
-  TAB_SHARED,
   costCategories,
+  costsOfCategory,
   createDraft,
-  editTabs,
+  deleteCategory,
+  editPersons,
   fieldValid,
   freshCategory,
   newRow,
   parseAmount,
-  problemPlace,
+  problemCategory,
+  removeSecondPerson,
   renameCategory,
   validInterval,
   validateDraft,
@@ -87,9 +89,8 @@ test("problems name the fields that cannot be saved", () => {
     { list: "fixed_costs", id: draft.fixed_costs[3]._id, field: "amount" },
     { list: "fixed_costs", id: draft.fixed_costs[3]._id, field: "interval_months" },
   ]);
-  assert.deepEqual(problemPlace(draft, problems[0]), { tab: "b" });
-  assert.deepEqual(problemPlace(draft, problems[1]), { tab: TAB_COSTS, category: "" });
-  assert.deepEqual(problemPlace(draft, { list: TAB_SHARED, id: draft.shared_income[0]._id, field: "amount" }), { tab: TAB_SHARED });
+  assert.equal(problemCategory(draft, problems[0]), null); // in the overview
+  assert.equal(problemCategory(draft, problems[1]), ""); // in the category without name
 });
 
 test("empty amounts: 0 where needed, left out where optional", () => {
@@ -132,16 +133,34 @@ test("categories", () => {
   assert.deepEqual(costCategories(draft), ["", "Home"]);
 });
 
-test("tabs of the edit page", () => {
+test("persons while editing", () => {
   const draft = draftOf(BUDGET);
-  assert.deepEqual(editTabs(draft).keys, ["a", "b", TAB_SHARED, TAB_COSTS]);
+  assert.deepEqual(editPersons(draft), ["a", "b"]);
   draft.persons.b = "";
-  assert.deepEqual(editTabs(draft).keys, ["a", "b", TAB_SHARED, TAB_COSTS]); // the second person still has income
+  assert.deepEqual(editPersons(draft), ["a", "b"]); // the second person still has income
   draft.income = draft.income.filter((row) => row.person === "a");
-  assert.deepEqual(editTabs(draft).keys, ["a", TAB_SHARED, TAB_COSTS]); // joint income still has an entry
-  draft.shared_income = [];
-  assert.deepEqual(editTabs(draft).keys, ["a", TAB_COSTS]);
-  assert.deepEqual(editTabs(draft, true).persons, ["a", "b"]); // "+ Person" was pressed
+  draft.special_payments = draft.special_payments.filter((row) => row.person === "a");
+  assert.deepEqual(editPersons(draft), ["a"]);
+  assert.deepEqual(editPersons(draft, true), ["a", "b"]); // "+ Person" was pressed
+});
+
+test("removing the second person: own entries deleted, the rest goes to the first one", () => {
+  const draft = draftOf(BUDGET);
+  removeSecondPerson(draft);
+  assert.ok([...draft.income, ...draft.special_payments].every((row) => row.person === "a"));
+  assert.ok(draft.shared_income.every((row) => row.to === "a"));
+  assert.ok(draft.fixed_costs.every((row) => row.person === "a"));
+  assert.equal(draft.persons.b, "");
+  const { secondPersonInUse } = validateDraft(draft, LIMITS);
+  assert.equal(secondPersonInUse, false);
+});
+
+test("deleting a category deletes its entries", () => {
+  const draft = draftOf(BUDGET);
+  const count = draft.fixed_costs.length - costsOfCategory(draft, "Home").length;
+  deleteCategory(draft, "Home");
+  assert.equal(draft.fixed_costs.length, count);
+  assert.ok(!costCategories(draft).includes("Home"));
 });
 
 test("the lists have the same fields in the same order as in logic.py", () => {

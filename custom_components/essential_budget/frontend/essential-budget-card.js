@@ -2,7 +2,7 @@
  * Essential Budget card for Home Assistant (loaded automatically by the integration).
  *
  * <essential-budget-card> shows the budget: key figures, income, annual gross, fixed costs by category
- * and the detail view of a category. The budget is edited on the edit page (panel.js, editor.js),
+ * the detail view of a category and the debits by month. Admins edit the budget right in the card (editing.js),
  * the card options in the visual card editor (card-editor.js).
  *
  * Files next to this one:
@@ -12,8 +12,8 @@
  *   format.js      texts (texts.js) and number formats
  *   export.js      Excel export (xlsx.js writes the file)
  *   version.js     hint after updates
- *   draft.js, edit-view.js, editor.js, panel.js   the edit page
- *   styles.js, html.js, navigation.js             shared parts
+ *   editing.js     editing (draft.js the draft, draft-store.js keeps it, edit-view.js its HTML)
+ *   styles.js, html.js   shared parts
  *
  * All amounts are stored with cents and shown rounded to whole units of the currency set in
  * Home Assistant (Settings > System > General).
@@ -21,15 +21,15 @@
 
 import { getBudget, getInfo, onBudgetSaved } from "./api.js";
 import { DEFAULT_PRIVACY_SECONDS, DEFAULT_UPCOMING_DAYS, MAX_UPCOMING_DAYS, MIN_PRIVACY_SECONDS } from "./card-editor.js";
+import { dropDraft, keptDraft } from "./draft-store.js";
+import { EDIT_ACTIONS, EDIT_INPUTS, markFields, renderEditing, startEditing } from "./editing.js";
 import { downloadExcel } from "./export.js";
 import { formatter, localeOf, translator } from "./format.js";
 import { errorText, esc } from "./html.js";
 import { buildModel, buildSchedule } from "./model.js";
-import { openEditPage } from "./navigation.js";
-import "./panel.js";
-import { BASE_STYLE, VIEW_STYLE } from "./styles.js";
+import { BASE_STYLE, EDIT_STYLE, VIEW_STYLE } from "./styles.js";
 import { reloadPage, renderUpdate, setOwnVersion, updateState } from "./version.js";
-import { renderDetail, renderSchedule, renderView } from "./view.js";
+import { renderDetail, renderHeader, renderKeptDraft, renderKeyFigures, renderSchedule, renderView } from "./view.js";
 
 const VERSION = new URL(import.meta.url).searchParams.get("v"); // set by the integration from manifest.json
 setOwnVersion(VERSION);
@@ -37,7 +37,11 @@ setOwnVersion(VERSION);
 /* Clicks: data-action of the clicked element -> what happens (card = the card, data = its data attributes). */
 const ACTIONS = {
   export: (card) => downloadExcel(card._data, translator(card._hass), formatter(card._hass)),
-  openedit: (card) => openEditPage(card._hass, card),
+  edit: (card) => startEditing(card),
+  dropdraft(card) {
+    dropDraft();
+    card._render();
+  },
   reload: (card) => reloadPage(card._integrationVersion),
   reveal: (card) => card._showNumbers(!card._numbersShown),
   toggle(card, { key }) {
@@ -73,13 +77,22 @@ const ACTIONS = {
 class EssentialBudgetCard extends HTMLElement {
   constructor() {
     super();
-    this.attachShadow({ mode: "open" }).innerHTML = `<style>${BASE_STYLE}${VIEW_STYLE}</style><ha-card><div class="root"></div></ha-card>`;
+    this.attachShadow({ mode: "open" }).innerHTML =
+      `<style>${BASE_STYLE}${VIEW_STYLE}${EDIT_STYLE}</style><ha-card><div class="root"></div></ha-card>`;
     this._root = this.shadowRoot.querySelector(".root");
     this._root.addEventListener("click", (e) => {
       const el = e.target.closest("[data-action]");
-      if (el) ACTIONS[el.dataset.action]?.(this, el.dataset);
+      if (!el) return;
+      const action = (this._draft && EDIT_ACTIONS[el.dataset.action]) || ACTIONS[el.dataset.action];
+      action?.(this, el.dataset);
     });
+    const onInput = (e) => this._draft && EDIT_INPUTS[e.target.dataset?.bind]?.(this, e.target, e.type === "change");
+    this._root.addEventListener("input", onInput);
+    this._root.addEventListener("change", onInput);
     this._config = {};
+    this._draft = null; // the budget while it is edited (null = not editing)
+    this._edit = {}; // state of editing (see editing.js)
+    this._limits = {}; // limits of the integration for the fields
     this._open = new Set(); // expanded categories
     this._detail = null; // category shown in the detail view
     this._schedule = false; // debits by month shown
@@ -132,7 +145,7 @@ class EssentialBudgetCard extends HTMLElement {
     document.addEventListener("visibilitychange", this._onVisibility);
     if (!this._hass) return;
     this._connect();
-    // the budget may have been saved on the edit page while this card was not shown (no updates then)
+    // the budget may have been saved elsewhere while this card was not shown (no updates then)
     if (this._data) this._load();
   }
 
@@ -173,7 +186,9 @@ class EssentialBudgetCard extends HTMLElement {
   async _checkVersion() {
     let version = null;
     try {
-      ({ version } = await getInfo(this._hass));
+      const info = await getInfo(this._hass);
+      version = info.version;
+      this._limits = info.limits ?? {};
     } catch (e) {
       /* not reachable: nothing to compare */
     }
@@ -216,18 +231,44 @@ class EssentialBudgetCard extends HTMLElement {
     if (this.getBoundingClientRect().top < 0) this.scrollIntoView({ block: "start" });
   }
 
-  _render() {
+  /**
+   * Draws the card. focus = selector of the field to continue in (select = with its text selected);
+   * without it a field that had the focus while editing keeps it.
+   */
+  _render(focus = null, select = false) {
     if (!this._hass) return;
     const t = translator(this._hass);
+    focus ??= this._draft && focusSelector(this.shadowRoot.activeElement);
     this._root.lang = t.lang;
-    this._root.classList.toggle("private", !this._numbersShown);
-    this._root.innerHTML = renderUpdate(updateState(this._integrationVersion), t) + this._renderBody(t);
+    this._root.classList.toggle("private", !this._draft && !this._numbersShown);
+    this._root.classList.toggle("editing", !!this._draft);
+    this._root.innerHTML = this._html(t);
+    if (this._draft) markFields(this);
+    if (focus) this._focus(focus, select);
   }
 
-  _renderBody(t) {
-    if (this._error) return `<div class="box msg err">${esc(this._error)}</div>`;
-    if (!this._data) return "";
-    const ctx = {
+  /** While typing: only the parts that follow the typed values (data-live) are drawn again, the fields stay. */
+  _patch() {
+    const template = document.createElement("template");
+    template.innerHTML = this._html(translator(this._hass));
+    const now = this._root.querySelectorAll("[data-live]");
+    const next = template.content.querySelectorAll("[data-live]");
+    if (now.length !== next.length) return this._render();
+    const active = this.shadowRoot.activeElement;
+    now.forEach((el, i) => el.innerHTML !== next[i].innerHTML && !el.contains(active) && el.replaceWith(next[i]));
+  }
+
+  _focus(selector, select = false) {
+    const el = this._root.querySelector(selector);
+    if (el) select ? el.select?.() : el.focus();
+  }
+
+  _html(t) {
+    return renderUpdate(updateState(this._integrationVersion), t) + this._renderBody(t);
+  }
+
+  _ctx(t) {
+    return {
       t,
       fmt: formatter(this._hass),
       title: this._config.title,
@@ -236,6 +277,20 @@ class EssentialBudgetCard extends HTMLElement {
       open: this._open,
       month: this._month,
     };
+  }
+
+  /** The key figures (also while editing, from the draft). */
+  _renderKpis(model) {
+    return renderKeyFigures(model, this._ctx(translator(this._hass)));
+  }
+
+  _renderBody(t) {
+    if (this._error) return `<div class="box msg err">${esc(this._error)}</div>`;
+    if (!this._data) return "";
+    const ctx = this._ctx(t);
+    if (this._draft) return renderHeader(ctx, false) + renderEditing(this, ctx);
+    // unsaved changes from before (admins): continue or discard
+    ctx.kept = ctx.isAdmin && !!keptDraft(this._data);
     const model = buildModel(this._data);
     const schedule = buildSchedule(this._data);
     ctx.hasSchedule = schedule.any;
@@ -249,6 +304,13 @@ class EssentialBudgetCard extends HTMLElement {
     return group ? renderDetail(model, group, ctx) : renderView(model, ctx);
   }
 }
+
+/** A selector that finds a field again after drawing (by what it edits). */
+const focusSelector = (el) => {
+  if (!el?.dataset?.bind) return null;
+  const keys = ["bind", "list", "id", "field", "person", "key"].filter((k) => el.dataset[k] !== undefined);
+  return keys.map((k) => `[data-${k}="${CSS.escape(el.dataset[k])}"]`).join("");
+};
 
 if (!customElements.get("essential-budget-card")) {
   customElements.define("essential-budget-card", EssentialBudgetCard);

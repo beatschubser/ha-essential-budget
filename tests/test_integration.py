@@ -13,7 +13,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.essential_budget.const import DATA_FILE, DOMAIN, EDIT_PAGE_ELEMENT, EDIT_PATH, ISSUE_INVALID_FILE
+from custom_components.essential_budget.const import DATA_FILE, DOMAIN, ISSUE_INVALID_FILE
 from custom_components.essential_budget.logic import LIMITS
 
 MANIFEST = Path(__file__).parent.parent / "custom_components" / DOMAIN / "manifest.json"
@@ -71,7 +71,7 @@ async def test_file_created_and_saved(hass: HomeAssistant, hass_ws_client) -> No
     await client.send_json_auto_id({"type": f"{DOMAIN}/version"})
     # the version comes from manifest.json, the only place where it is set
     version = json.loads(MANIFEST.read_text(encoding="utf-8"))["version"]
-    assert (await client.receive_json())["result"] == {"version": version, "edit_path": f"/{EDIT_PATH}", "limits": LIMITS}
+    assert (await client.receive_json())["result"] == {"version": version, "limits": LIMITS}
 
     await client.send_json_auto_id({"type": f"{DOMAIN}/subscribe"})
     assert (await client.receive_json())["success"]
@@ -126,17 +126,6 @@ async def test_save_needs_admin(hass: HomeAssistant, hass_ws_client, hass_read_o
     await client.send_json_auto_id({"type": f"{DOMAIN}/save", "data": BUDGET})
     result = await client.receive_json()
     assert result["error"]["code"] == "unauthorized"
-
-
-async def test_edit_page_registered(hass: HomeAssistant) -> None:
-    """The edit page is registered for admins only and without a sidebar entry."""
-    await setup(hass)
-    panel = hass.data["frontend_panels"][EDIT_PATH]
-    assert panel.require_admin
-    assert panel.sidebar_title is None
-    assert panel.config["_panel_custom"]["name"] == EDIT_PAGE_ELEMENT
-    assert panel.config["_panel_custom"]["module_url"].endswith("?v=" + json.loads(MANIFEST.read_text(encoding="utf-8"))["version"])
-    assert panel.config_panel_domain == DOMAIN
 
 
 async def test_frontend_files_served(hass: HomeAssistant, hass_client_no_auth) -> None:

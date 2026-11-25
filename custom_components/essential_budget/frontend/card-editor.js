@@ -1,9 +1,6 @@
 /* <essential-budget-card-editor>: the visual card editor (title and privacy mode; all other keys like grid_options are kept). */
 
 import { translator } from "./format.js";
-import { esc } from "./html.js";
-import { openEditPage } from "./navigation.js";
-import { CARD_EDITOR_STYLE } from "./styles.js";
 
 export const DEFAULT_PRIVACY_SECONDS = 30; // privacy mode: numbers are hidden again after this time
 export const MIN_PRIVACY_SECONDS = 5;
@@ -39,15 +36,6 @@ class EssentialBudgetCardEditor extends HTMLElement {
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
     });
     this.append(this._form);
-    // the budget itself is edited on its own page
-    if (this._hass.user?.is_admin) {
-      const link = document.createElement("div");
-      link.className = "eb-edit-link";
-      link.innerHTML = `<style>${CARD_EDITOR_STYLE}</style><span>${esc(t("edit_link_hint"))}</span>
-        <button type="button"><ha-icon icon="mdi:pencil"></ha-icon>${esc(t("edit_title"))}</button>`;
-      link.querySelector("button").addEventListener("click", () => openEditPage(this._hass, this));
-      this.append(link);
-    }
   }
 
   _render() {

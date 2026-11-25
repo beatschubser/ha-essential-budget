@@ -1,17 +1,25 @@
-/* The edit page as HTML: tabs per person, joint income and fixed costs (in category tabs), and the footer with the save button. */
+/*
+ * The card while the budget is edited, as HTML: the overview with editable boxes (income, joint income, special
+ * payments, categories) and the detail view of a category with its fixed costs. The key figures stay read-only.
+ */
 
-import { TAB_COSTS, TAB_SHARED, costsOfCategory, INTERVALS, isMonthlyRow } from "./draft.js";
-import { esc, iconButton, sectionHead } from "./html.js";
-import { PERSONS, activePersons, categoryLabel, personColor, personLabel } from "./model.js";
+import { INTERVALS, LIST_COSTS, LIST_SHARED, costCategories, costsOfCategory, editPersons, isMonthlyRow } from "./draft.js";
+import { esc, iconButton, numSpan, sectionHead } from "./html.js";
+import { JOINT_COLOR, PERSONS, activePersons, categoryLabel, personColor, personLabel } from "./model.js";
 
 /*
- * ctx: { t, fmt, limits } with t = translator, fmt = formatter, limits = limits of the integration.
- * Every field has data-bind (how the editor handles its input, see editor.js) and where needed
+ * ctx: { t, fmt, limits, model, state }
+ * with t = translator, fmt = formatter, limits = limits of the integration, model = buildModel of the draft,
+ * state = { adding (second person just added), confirm ({ kind, key } waiting for a yes), saving, saveError }.
+ * Every field has data-bind (how its input is handled, see editing.js) and where needed
  * data-list, data-id and data-field (the place of its value in the draft).
  */
 
 const AMOUNT_ATTRS = 'inputmode="decimal" autocomplete="off"';
 const maxLength = (limit) => (limit ? ` maxlength="${limit}"` : "");
+const money = (ctx, value) => numSpan(ctx.fmt.money(value));
+/** Parts that follow the typed values; they are updated while typing (see editing.js). */
+const live = (html, tag = "span") => `<${tag} class="live" data-live>${html}</${tag}>`;
 
 /** A field with a label that is only visible where the styles show it (else for screen readers). */
 const field = (name, label, control) => `<label class="field f-${name}"><span class="sr">${esc(label)}</span>${control}</label>`;
@@ -37,13 +45,13 @@ const personSelect = (list, row, name, label, draft, ctx) => {
   const options = PERSONS.map(
     (p) => `<option value="${p}" ${row[name] === p ? "selected" : ""}>${esc(personLabel(draft.persons, p, ctx.t))}</option>`,
   ).join("");
-  return field(name, label, `<select ${rowAttrs(list, row, name)}>${options}</select>`);
+  return field(name, label, live(`<select ${rowAttrs(list, row, name)}>${options}</select>`));
 };
 
 /** Monthly, quarterly, yearly or "Other interval": then the select becomes a field "N months" with a small menu to go back. */
 const intervalField = (row, ctx) => {
   const { t } = ctx;
-  const place = `data-list="${TAB_COSTS}" data-id="${row._id}"`;
+  const place = `data-list="${LIST_COSTS}" data-id="${row._id}"`;
   const options =
     INTERVALS.map(
       (n) => `<option value="${n}" ${!row._custom && String(n) === String(row.interval_months) ? "selected" : ""}>${esc(t.freq(n))}</option>`,
@@ -51,13 +59,13 @@ const intervalField = (row, ctx) => {
   const select = (label) => `<select aria-label="${esc(label)}" data-bind="interval-select" ${place}>${options}</select>`;
   if (!row._custom) return `<div class="field f-freq">${select(t("frequency"))}</div>`;
   const width = Math.max(1, String(row.interval_months).length) + 0.4;
-  return `<div class="field f-freq"><span class="money"><input type="text" inputmode="numeric" autocomplete="off" maxlength="3" aria-label="${esc(t("interval_label"))}" data-bind="interval" ${place} data-field="interval_months" value="${esc(row.interval_months)}" style="width:${width}ch"><span class="months" aria-hidden="true">${esc(t("months"))}</span><span class="freq-menu"><ha-icon icon="mdi:chevron-down"></ha-icon>${select(t("frequency"))}</span></span></div>`;
+  return `<div class="field f-freq"><span class="money"><input type="text" inputmode="numeric" autocomplete="off" maxlength="3" aria-label="${esc(t("interval_label"))}" data-bind="interval" ${place} data-field="interval_months" value="${esc(row.interval_months)}" style="width:${width}ch"><span class="unit-months" aria-hidden="true">${esc(t("months"))}</span><span class="freq-menu"><ha-icon icon="mdi:chevron-down"></ha-icon>${select(t("frequency"))}</span></span></div>`;
 };
 
 /** Debit date: the day, and for fixed costs that are not paid monthly the month of a debit (the others follow the interval). */
 const dueField = (row, ctx) => {
   const { t, fmt } = ctx;
-  const day = `<input class="due-day" type="text" inputmode="numeric" autocomplete="off" maxlength="2" placeholder="${esc(t("due_day"))}" aria-label="${esc(`${t("due")}: ${t("due_day")}`)}" ${rowAttrs(TAB_COSTS, row, "due_day")} value="${esc(row.due_day)}">`;
+  const day = `<input class="due-day" type="text" inputmode="numeric" autocomplete="off" maxlength="2" placeholder="${esc(t("due_day"))}" aria-label="${esc(`${t("due")}: ${t("due_day")}`)}" ${rowAttrs(LIST_COSTS, row, "due_day")} value="${esc(row.due_day)}">`;
   // the day reads like a date: "15."
   const dayField = `<span class="money due-day-frame">${day}<span class="cur" aria-hidden="true">.</span></span>`;
   const months = [...Array(12)]
@@ -65,7 +73,7 @@ const dueField = (row, ctx) => {
     .join("");
   const month = isMonthlyRow(row)
     ? ""
-    : `<select aria-label="${esc(`${t("due")}: ${t("due_month")}`)}" ${rowAttrs(TAB_COSTS, row, "due_month")}><option value="">${esc(t("due_month"))}</option>${months}</select>`;
+    : `<select aria-label="${esc(`${t("due")}: ${t("due_month")}`)}" ${rowAttrs(LIST_COSTS, row, "due_month")}><option value="">${esc(t("due_month"))}</option>${months}</select>`;
   return `<div class="field f-due"><span class="label">${esc(t("due"))}</span><span class="due">${dayField}${month}</span></div>`;
 };
 
@@ -75,31 +83,38 @@ const removeButton = (list, row, ctx) =>
 const addButton = (list, label, person = "") =>
   `<button class="add" data-action="add" data-list="${list}" ${person ? `data-person="${person}"` : ""}><ha-icon icon="mdi:plus"></ha-icon>${esc(label)}</button>`;
 
-/** Column headers above the rows of a list, only shown on wide pages (cols: [field, label]). */
+/** Column headers above the rows of a list, only shown on wide boxes (cols: [field, label]). */
 const headRow = (cls, rows, cols) =>
   rows.length ? `<div class="erow ${cls} ehead">${cols.map(([name, label]) => `<span class="f-${name}">${esc(label)}</span>`).join("")}</div>` : "";
 
 const row = (cls, r, fields) => `<div class="erow ${cls}" data-id="${r._id}">${fields.join("")}</div>`;
 
-/* ---------- A person: name, color, income and special payments ---------- */
+/** A question before deleting: the text and the buttons "Delete" and "Cancel". */
+const confirmBox = (text, ctx) =>
+  `<div class="confirm" role="alertdialog"><span class="grow">${esc(text)}</span>
+    <button class="btn" data-action="confirm-no">${esc(ctx.t("abort"))}</button>
+    <button class="btn danger" data-action="confirm-yes">${esc(ctx.t("delete"))}</button></div>`;
 
-const personNameBox = (p, draft, ctx) => {
+const confirming = (ctx, kind, key) => ctx.state.confirm?.kind === kind && ctx.state.confirm.key === key;
+
+/* ---------- Monthly net: a block per person (name, color, income) and the joint income ---------- */
+
+const personBlock = (p, draft, ctx) => {
   const { t } = ctx;
+  const rows = draft.income.filter((r) => r.person === p);
+  const color = `<input type="color" data-bind="person-color" data-person="${p}" value="${esc(personColor(draft.colors, p))}" title="${esc(t("color"))}" aria-label="${esc(t("color"))}">`;
+  const name = `<input type="text" data-bind="person-name" data-person="${p}" value="${esc(draft.persons[p])}" placeholder="${esc(t(p === "a" ? "person_name" : "name_optional"))}" aria-label="${esc(t("person_name"))}"${maxLength(ctx.limits.person_name)}>`;
   // the reset button is only there while an own color is set
   const reset = draft.colors[p]
     ? iconButton({ action: "resetcolor", icon: "mdi:restore", label: t("reset_color"), cls: "small-btn", data: { key: p } })
     : "";
-  const name = `<input type="text" data-bind="person-name" data-person="${p}" value="${esc(draft.persons[p])}" placeholder="${esc(t(p === "a" ? "person_name" : "name_optional"))}"${maxLength(ctx.limits.person_name)}>`;
-  const color = `<input type="color" data-bind="person-color" data-person="${p}" value="${esc(personColor(draft.colors, p))}" title="${esc(t("color"))}">`;
-  return `<div class="box">${sectionHead("mdi:account", t("person_name"))}
-    <div class="name-row"><label class="field grow"><span class="sr">${esc(t("person_name"))}</span>${name}</label>${field("color", t("color"), color)}${reset}</div>
-    ${p === "b" ? `<div class="hint flat">${esc(t("one_person_hint"))}</div>` : ""}</div>`;
-};
-
-const incomeBox = (p, draft, ctx) => {
-  const { t } = ctx;
-  const rows = draft.income.filter((r) => r.person === p);
-  return `<div class="box">${sectionHead("mdi:cash-plus", t("income"))}
+  const remove =
+    p === "b" ? iconButton({ action: "removeperson", icon: "mdi:account-remove-outline", label: t("remove_person"), cls: "small-btn" }) : "";
+  const question = confirming(ctx, "person", p)
+    ? confirmBox(t("remove_person_confirm", { name: personLabel(draft.persons, "b", t), other: personLabel(draft.persons, "a", t) }), ctx)
+    : "";
+  return `<div class="block">
+    <div class="person-head"><span class="field f-color">${color}</span><span class="field grow">${name}</span>${reset}${remove}</div>${question}
     ${headRow("income", rows, [
       ["name", t("name")],
       ["gross", t("gross_month")],
@@ -118,29 +133,15 @@ const incomeBox = (p, draft, ctx) => {
     ${addButton("income", t("add_income"), p)}</div>`;
 };
 
-const specialPaymentsBox = (p, draft, ctx) => {
-  const { t } = ctx;
-  const rows = draft.special_payments.filter((r) => r.person === p);
-  return `<div class="box">${sectionHead("mdi:gift-outline", t("special_payments"), "", t("special_hint"))}
-    ${headRow("special", rows, [
-      ["name", t("name")],
-      ["gross", t("gross")],
-    ])}
-    ${rows.map((r) => row("special", r, [nameInput("special_payments", r, ctx), amountInput("special_payments", r, "gross", t("gross"), ctx), removeButton("special_payments", r, ctx)])).join("")}
-    ${addButton("special_payments", t("add_special"), p)}</div>`;
-};
-
-const personSection = (p, draft, ctx) => personNameBox(p, draft, ctx) + incomeBox(p, draft, ctx) + specialPaymentsBox(p, draft, ctx);
-
-/* ---------- Joint income: received on the account of one person ---------- */
-
-const sharedSection = (draft, ctx) => {
+/** Joint income: received on the account of one person. */
+const sharedBlock = (draft, ctx) => {
   const { t } = ctx;
   const single = activePersons(draft.persons).length === 1;
-  const list = TAB_SHARED;
   const rows = draft.shared_income;
   const cls = `shared ${single ? "single" : ""}`;
-  return `<div class="box">${sectionHead("mdi:account-group-outline", t("shared_income"), "", t("shared_hint"))}
+  return `<div class="block">
+    <div class="block-head"><span class="dot" style="background:${JOINT_COLOR}"></span><span class="grow">${esc(t("shared"))}</span></div>
+    <div class="hint flat">${esc(t("shared_hint"))}</div>
     ${
       single
         ? ""
@@ -153,96 +154,146 @@ const sharedSection = (draft, ctx) => {
     ${rows
       .map((r) =>
         row(cls, r, [
-          nameInput(list, r, ctx),
-          single ? "" : personSelect(list, r, "to", t("received_by"), draft, ctx),
-          amountInput(list, r, "amount", t("amount"), ctx),
-          removeButton(list, r, ctx),
+          nameInput(LIST_SHARED, r, ctx),
+          single ? "" : personSelect(LIST_SHARED, r, "to", t("received_by"), draft, ctx),
+          amountInput(LIST_SHARED, r, "amount", t("amount"), ctx),
+          removeButton(LIST_SHARED, r, ctx),
         ]),
       )
       .join("")}
-    ${addButton(list, t("add_shared"))}</div>`;
+    ${addButton(LIST_SHARED, t("add_shared"))}</div>`;
 };
 
-/* ---------- Fixed costs: one tab per category, a row belongs to the tab of its category ---------- */
-
-const categoryTabs = (categories, state, ctx) => {
-  const { t } = ctx;
-  const tabs = categories
-    .map((c) => {
-      const active = c === state.category;
-      return active && state.renaming
-        ? `<input class="tab-rename" type="text" data-bind="category-name" value="${esc(c)}" placeholder="${esc(t("category"))}" aria-label="${esc(t("rename_category"))}"${maxLength(ctx.limits.category)}>`
-        : `<button class="tab ${active ? "active" : ""}" role="tab" aria-selected="${active}" data-action="category" data-key="${esc(c)}">${esc(categoryLabel(c, t))}</button>`;
-    })
-    .join("");
-  const rename = categories.length ? iconButton({ action: "rename", icon: "mdi:pencil", label: t("rename_category"), cls: "small-btn" }) : "";
-  // the tabs wrap into more lines; rename and "+ Category" stay at the top right
-  return `<div class="tabs"><div class="tab-list" role="tablist" aria-label="${esc(t("categories"))}">${tabs}</div>
-    <div class="tab-actions">${rename}<button class="tab new" data-action="newcategory"><ha-icon icon="mdi:plus"></ha-icon>${esc(t("new_category"))}</button></div></div>`;
+const monthlyNetBox = (draft, ctx) => {
+  const { t, model, state } = ctx;
+  const persons = editPersons(draft, state.adding);
+  const addPerson =
+    persons.length === 1
+      ? `<button class="add" data-action="addperson"><ha-icon icon="mdi:account-plus-outline"></ha-icon>${esc(t("add_person"))}</button>`
+      : "";
+  return `<div class="box editing">${sectionHead("mdi:cash-plus", t("monthly_net"), live(money(ctx, model.incomeTotal)))}
+    <div class="blocks">${persons.map((p) => personBlock(p, draft, ctx)).join("")}${sharedBlock(draft, ctx)}</div>${addPerson}</div>`;
 };
 
-const costsSection = (draft, categories, state, ctx) => {
-  const { t } = ctx;
+/* ---------- Annual gross: salaries (12 × monthly gross, edited with the income) and special payments ---------- */
+
+const annualGrossBox = (draft, ctx) => {
+  const { t, model, state } = ctx;
+  const blocks = editPersons(draft, state.adding).map((p) => {
+    const person = model.people.find((x) => x.key === p);
+    const salaries = (person?.grossItems || [])
+      .filter((i) => i.monthly != null)
+      .map(
+        (i) =>
+          `<div class="line"><span class="ellipsis">${esc(i.name)} <span class="small">(12 × ${money(ctx, i.monthly)})</span></span><span>${money(ctx, i.value)}</span></div>`,
+      )
+      .join("");
+    const rows = draft.special_payments.filter((r) => r.person === p);
+    return `<div class="block">
+      <div class="block-head"><span class="dot" style="background:${personColor(draft.colors, p)}"></span><span class="grow">${live(esc(personLabel(draft.persons, p, t)))}</span><span class="strong">${live(money(ctx, person?.gross || 0))}</span></div>
+      ${live(salaries, "div")}
+      ${headRow("special", rows, [
+        ["name", t("special_payments")],
+        ["gross", t("gross")],
+      ])}
+      ${rows
+        .map((r) =>
+          row("special", r, [
+            nameInput("special_payments", r, ctx),
+            amountInput("special_payments", r, "gross", t("gross"), ctx),
+            removeButton("special_payments", r, ctx),
+          ]),
+        )
+        .join("")}
+      ${addButton("special_payments", t("add_special"), p)}</div>`;
+  });
+  return `<div class="box editing">${sectionHead("mdi:calendar-range", t("annual_gross"), live(money(ctx, model.grossTotal)), t("special_hint"))}
+    <div class="blocks">${blocks.join("")}</div></div>`;
+};
+
+/* ---------- Fixed costs: the categories (rename, delete, open to edit their entries) ---------- */
+
+const categoryRow = (category, draft, ctx) => {
+  const { t, model } = ctx;
+  const group = model.groups.find((g) => g.category === category);
+  const count = costsOfCategory(draft, category).length;
+  const name = `<input type="text" data-bind="category-name" data-key="${esc(category)}" value="${esc(category)}" placeholder="${esc(t("no_category"))}" aria-label="${esc(t("rename_category"))}"${maxLength(ctx.limits.category)}>`;
+  const question = confirming(ctx, "category", category)
+    ? confirmBox(t("delete_category_confirm", { c: categoryLabel(category, t), n: count }), ctx)
+    : "";
+  return `<div class="ecat">
+    <span class="dot" style="background:${group?.color || JOINT_COLOR}"></span>
+    <span class="field">${name}</span>
+    <span class="cat-value">${live(money(ctx, group?.sum || 0))}</span>
+    ${iconButton({ action: "detail", icon: "mdi:pencil", label: t("edit_entries", { c: categoryLabel(category, t) }), data: { key: category } })}
+    ${iconButton({ action: "deletecategory", icon: "mdi:delete-outline", label: t("delete_category"), data: { key: category } })}
+  </div>${question}`;
+};
+
+const fixedCostsBox = (draft, ctx) => {
+  const { t, model } = ctx;
+  return `<div class="box editing">${sectionHead("mdi:receipt-text-outline", t("fixed_costs"), live(money(ctx, model.costTotal)))}
+    ${costCategories(draft)
+      .map((c) => categoryRow(c, draft, ctx))
+      .join("")}
+    <button class="add" data-action="newcategory"><ha-icon icon="mdi:plus"></ha-icon>${esc(t("new_category"))}</button></div>`;
+};
+
+/** The overview while editing: key figures (read-only, kpis = their HTML), then the editable boxes. */
+export const renderEditOverview = (draft, kpis, ctx) => {
+  const left = monthlyNetBox(draft, ctx) + annualGrossBox(draft, ctx);
+  return `${live(kpis, "div")}<div class="columns"><div class="column">${left}</div><div class="column costs">${fixedCostsBox(draft, ctx)}</div></div>${footer(ctx)}`;
+};
+
+/* ---------- A category: its name and its fixed costs ---------- */
+
+export const renderEditCategory = (draft, category, ctx) => {
+  const { t, model } = ctx;
   const single = activePersons(draft.persons).length === 1;
-  const list = TAB_COSTS;
-  const rows = costsOfCategory(draft, state.category);
+  const rows = costsOfCategory(draft, category);
   const cls = `costs ${single ? "single" : ""}`;
-  return `<div class="box">${sectionHead("mdi:receipt-text-outline", t("fixed_costs"))}
-    ${categoryTabs(categories, state, ctx)}
-    ${headRow(cls, rows, [["name", t("name")], ["amount", t("amount")], ["freq", t("frequency")], ["due", t("due")], ...(single ? [] : [["person", t("paid_by")]])])}
-    ${rows
-      .map((r) =>
-        row(cls, r, [
-          nameInput(list, r, ctx),
-          amountInput(list, r, "amount", t("amount"), ctx),
-          intervalField(r, ctx),
-          dueField(r, ctx),
-          single ? "" : personSelect(list, r, "person", t("paid_by"), draft, ctx),
-          removeButton(list, r, ctx),
-        ]),
-      )
-      .join("")}
-    ${addButton(list, t("add_cost"))}</div>`;
+  const group = model.groups.find((g) => g.category === category);
+  const name = `<input class="title-input" type="text" data-bind="category-name" data-key="${esc(category)}" value="${esc(category)}" placeholder="${esc(t("no_category"))}" aria-label="${esc(t("rename_category"))}"${maxLength(ctx.limits.category)}>`;
+  const question = confirming(ctx, "category", category)
+    ? confirmBox(t("delete_category_confirm", { c: categoryLabel(category, t), n: rows.length }), ctx)
+    : "";
+  return `<div class="detail-head">
+      ${iconButton({ action: "back", icon: "mdi:arrow-left", label: t("back"), cls: "round" })}
+      <span class="dot square" style="background:${group?.color || JOINT_COLOR}"></span>
+      <span class="field grow">${name}</span>
+      ${iconButton({ action: "deletecategory", icon: "mdi:delete-outline", label: t("delete_category"), data: { key: category } })}
+    </div>${question}
+    <div class="box editing">${sectionHead("mdi:receipt-text-outline", t("fixed_costs"), live(money(ctx, group?.sum || 0)))}
+      ${headRow(cls, rows, [
+        ["name", t("name")],
+        ["amount", t("amount")],
+        ["freq", t("frequency")],
+        ["due", t("due")],
+        ...(single ? [] : [["person", t("paid_by")]]),
+      ])}
+      ${rows
+        .map((r) =>
+          row(cls, r, [
+            nameInput(LIST_COSTS, r, ctx),
+            amountInput(LIST_COSTS, r, "amount", t("amount"), ctx),
+            intervalField(r, ctx),
+            dueField(r, ctx),
+            single ? "" : personSelect(LIST_COSTS, r, "person", t("paid_by"), draft, ctx),
+            removeButton(LIST_COSTS, r, ctx),
+          ]),
+        )
+        .join("")}
+      ${addButton(LIST_COSTS, t("add_cost"))}</div>${footer(ctx)}`;
 };
 
-/* ---------- The page ---------- */
+/* ---------- Footer: stays at the bottom while editing ---------- */
 
-const pageTabs = (tabs, draft, state, ctx) => {
-  const { t } = ctx;
-  const label = (key) => {
-    if (key === TAB_COSTS) return esc(t("fixed_costs"));
-    if (key === TAB_SHARED) return esc(t("shared_income"));
-    return `<span class="dot" style="background:${personColor(draft.colors, key)}"></span>${esc(personLabel(draft.persons, key, t))}`;
-  };
-  const button = (key) =>
-    `<button class="edit-tab ${key === state.tab ? "active" : ""}" role="tab" aria-selected="${key === state.tab}" data-action="tab" data-key="${key}">${label(key)}</button>`;
-  // "+ Person" sits after the person tabs, before joint income and fixed costs
-  const addPerson = tabs.persons.includes("b")
-    ? ""
-    : `<button class="edit-tab add-person" data-action="addperson"><ha-icon icon="mdi:plus"></ha-icon>${esc(t("person"))}</button>`;
-  return `<div class="edit-tabs" role="tablist">${tabs.persons.map(button).join("")}${addPerson}${tabs.shared ? button(TAB_SHARED) : ""}${button(TAB_COSTS)}</div>`;
-};
-
-const footer = (state, ctx) => {
-  const { t } = ctx;
+const footer = (ctx) => {
+  const { t, state } = ctx;
   const disabled = state.saving ? "disabled" : "";
   return `<div class="box footer">
     <div class="save-error" ${state.saveError ? "" : "hidden"}>${esc(state.saveError || "")}</div>
-    ${state.saved && !state.saveError ? `<div class="saved"><ha-icon icon="mdi:check-circle"></ha-icon>${esc(t("saved"))}</div>` : ""}
-    <span class="grow"></span>
     <button class="btn" data-action="cancel" ${disabled}>${esc(t("cancel"))}</button>
     <button class="btn primary" data-action="save" ${disabled}>${esc(t(state.saving ? "saving" : "save"))}</button>
   </div>`;
-};
-
-/**
- * tabs = draft.editTabs(...), categories = draft.costCategories(...),
- * state = { tab, category, renaming, saving, saveError, saved } (tab and category must exist).
- */
-export const renderEditor = (draft, tabs, categories, state, ctx) => {
-  let section;
-  if (state.tab === TAB_COSTS) section = costsSection(draft, categories, state, ctx);
-  else if (state.tab === TAB_SHARED) section = sharedSection(draft, ctx);
-  else section = personSection(state.tab, draft, ctx);
-  return pageTabs(tabs, draft, state, ctx) + section + footer(state, ctx);
 };

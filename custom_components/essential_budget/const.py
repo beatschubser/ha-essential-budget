@@ -17,11 +17,6 @@ DATA_FILE = ".storage/essential_budget.json"
 FRONTEND_URL = "/essential_budget_files"
 CARD_URL = f"{FRONTEND_URL}/essential-budget-card.js"
 
-# Edit page: own page for editing the budget (admins only, no sidebar entry; linked from the card,
-# the card editor and the "Configure" button of the integration)
-EDIT_PATH = "essential-budget"
-EDIT_PAGE_ELEMENT = "essential-budget-panel"
-
 # Dispatcher signal: the budget was saved (open cards reload it)
 SIGNAL_CHANGED = "essential_budget_changed"
 

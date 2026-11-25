@@ -6,16 +6,17 @@ import { JOINT_COLOR, categoryLabel, pct } from "./model.js";
 
 /*
  * ctx (what the functions need besides the model):
- * { t, fmt, title, isAdmin, numbersShown, open, hasSchedule, upcoming, month }
+ * { t, fmt, title, isAdmin, numbersShown, open, hasSchedule, upcoming, month, kept }
  * with t = translator, fmt = formatter, open = Set of expanded categories, hasSchedule = a fixed cost has a debit date,
- * upcoming = { days, items } for the box "Next debits" of the overview (null = no box), month = month chosen in the debits by month
+ * upcoming = { days, items } for the box "Next debits" of the overview (null = no box), month = month chosen in the debits by month,
+ * kept = there are unsaved changes from before
  */
 
 const money = (ctx, value) => numSpan(ctx.fmt.money(value));
 const percent = (part, whole) => numSpan(`${pct(part, whole)} %`);
 const barWidth = (value, max) => (max ? (value / max) * 100 : 0);
 
-/** Title (optional) and the buttons: show/hide numbers at the left, debits by month, Excel download and (admins) the edit page at the right. */
+/** Title (optional) and the buttons: show/hide numbers at the left, debits by month, Excel download and (admins) editing at the right. */
 export const renderHeader = (ctx, buttons = true) => {
   const { t, title, isAdmin, numbersShown } = ctx;
   const heading = title ? `<h1 class="title">${esc(title)}</h1>` : "";
@@ -30,17 +31,23 @@ export const renderHeader = (ctx, buttons = true) => {
   const actions =
     (ctx.hasSchedule ? iconButton({ action: "schedule", icon: "mdi:calendar-month-outline", label: t("show_schedule") }) : "") +
     iconButton({ action: "export", icon: "mdi:microsoft-excel", label: t("export") }) +
-    (isAdmin ? iconButton({ action: "openedit", icon: "mdi:cog-outline", label: t("edit_title") }) : "");
+    (isAdmin ? iconButton({ action: "edit", icon: "mdi:pencil", label: t("edit_title") }) : "");
   return `<div class="header">${eye}${heading}<div class="actions">${actions}</div></div>`;
 };
 
+/** Unsaved changes from before (admins): continue editing or discard them. */
+export const renderKeptDraft = (t) =>
+  `<div class="box kept"><ha-icon icon="mdi:content-save-alert-outline"></ha-icon><span class="grow">${esc(t("kept_draft"))}</span>
+    <button class="btn" data-action="dropdraft">${esc(t("cancel"))}</button>
+    <button class="btn primary" data-action="edit">${esc(t("continue_edit"))}</button></div>`;
+
 const renderEmpty = (ctx) => {
   const { t, isAdmin } = ctx;
-  const edit = isAdmin ? `<button class="add" data-action="openedit"><ha-icon icon="mdi:pencil"></ha-icon>${esc(t("edit_title"))}</button>` : "";
+  const edit = isAdmin ? `<button class="add" data-action="edit"><ha-icon icon="mdi:pencil"></ha-icon>${esc(t("edit_title"))}</button>` : "";
   return `${renderHeader(ctx, false)}<div class="box msg">${esc(t("empty"))}${edit}</div>`;
 };
 
-const renderKeyFigures = (m, ctx) => {
+export const renderKeyFigures = (m, ctx) => {
   const { t } = ctx;
   const share = esc(t("of_income", { p: "\u0000" })).replace("\u0000", percent(m.costTotal, m.incomeTotal));
   const figure = (cls, label, value, sub) =>
@@ -135,7 +142,7 @@ export const renderView = (m, ctx) => {
   if (m.empty) return renderEmpty(ctx);
   const left = renderMonthlyNet(m, ctx) + renderAnnualGross(m, ctx);
   const right = renderFixedCosts(m, ctx) + renderUpcoming(m, ctx);
-  return `${renderHeader(ctx)}${renderKeyFigures(m, ctx)}<div class="columns"><div class="column">${left}</div><div class="column costs">${right}</div></div>`;
+  return `${renderHeader(ctx)}${ctx.kept ? renderKeptDraft(ctx.t) : ""}${renderKeyFigures(m, ctx)}<div class="columns"><div class="column">${left}</div><div class="column costs">${right}</div></div>`;
 };
 
 /** The detail view of one category: its sums and a table of its fixed costs (a list on narrow cards). */

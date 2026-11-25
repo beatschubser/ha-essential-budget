@@ -1,7 +1,7 @@
 /* The calculation: everything the view shows is derived here from the saved budget. */
 
 export const PERSONS = ["a", "b"];
-export const PERSON_COLORS = { a: "#2f6fde", b: "#d9822b" }; // defaults; persons can get own colors on the edit page
+export const PERSON_COLORS = { a: "#2f6fde", b: "#d9822b" }; // defaults; persons can get own colors while editing
 export const JOINT_COLOR = "#7a8794"; // joint income belongs to no single person
 // Category colors, assigned in alphabetical order of the category names
 const PALETTE = ["#2f6fde", "#7c5cd6", "#d9822b", "#1f8f74", "#b0436e", "#0e7c99", "#8a6d1f", "#a23b3b", "#4b8b2f", "#5f6b78"];

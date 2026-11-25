@@ -14,9 +14,9 @@ A static household budget for Home Assistant, for one or two persons: monthly ne
 - **Categories** sorted by size with share and bar; expand a category to see its items, or open it for all details (amount per payment, per month, per year)
 - **Free budget per person** (with two persons, below the free budget): own income + joint income received by the person − fixed costs paid by the person; negative values are shown in red
 - **Annual gross** in its own box, per person: 12 × the monthly gross of the income + the gross of the special payments
-- **Own edit page:** income and fixed costs are edited on their own page, the card on the dashboard only shows the budget (administrators only, no sidebar entry)
+- **Editing in the card:** the pencil at the top right turns the card into its edit mode (administrators only): persons, income, joint income and special payments in the overview, categories renamed, added or deleted there, fixed costs in the detail view of their category. Unsaved changes are kept in the browser until they are saved or discarded
 - **Debit dates (optional):** give a fixed cost the day it is debited (and, if it is not paid monthly, a month with a debit; the others follow the interval). The calendar icon at the top of the card then shows the debits of the next 12 months as bars, and the debits of the next 30 days or of a chosen month. Below the fixed costs a box shows the debits of the next days (7 by default, set in the card options) Intervals that do not fit into a year (e.g. every 5 months) are counted from the chosen month in every year
-- **Excel export:** the Excel icon at the top right of the card downloads the income and the fixed costs as an Excel file (with sums and formulas; with debit dates also the debits by month); the gear next to it opens the edit page (administrators only)
+- **Excel export:** the Excel icon at the top right of the card downloads the income and the fixed costs as an Excel file (with sums and formulas; with debit dates also the debits by month)
 - **Show/hide numbers:** the eye icon at the top of the card blurs all numbers until it is tapped again or the page is reloaded
 - **Privacy mode** (optional): the numbers start hidden; after tapping the eye icon they are hidden again after a set time (default 30 seconds), when the app or browser tab goes to the background and when you tap again
 - Desktop layout on wide cards (income and annual gross on the left, fixed costs and the next debits on the right), one column on phones; follows the colors of your theme
@@ -40,14 +40,7 @@ privacy: true          # optional: numbers hidden until the eye icon is tapped
 privacy_seconds: 60    # optional: hide the numbers again after (default 30)
 ```
 
-To enter or change the budget, open the edit page in one of these ways:
-
-- the gear icon at the top right of the card
-- **Settings > Devices & services > Essential Budget >** gear icon (**Configure**) next to the entry
-- in the dashboard editor, open the card and choose **Edit budget** below the card options
-- directly at `/essential-budget` (e.g. as a bookmark)
-
-Save the budget with **Save budget** below the entries. The page has no sidebar entry and is only available to administrators.
+To enter or change the budget, tap the pencil at the top right of the card (administrators only). Open a category with the pencil next to it to edit its fixed costs. Save with **Save budget** at the bottom; **Discard changes** goes back to the saved budget.
 
 ## Your data
 
@@ -70,7 +63,7 @@ Everything is stored in **`.storage/essential_budget.json`** in your Home Assist
 
 - `amount` of a fixed cost is the amount **per payment**, paid every `interval_months` months (1 = monthly, 3 = quarterly, 12 = yearly, up to 120)
 - `amount` of income is the net amount per month, `gross` is optional; special payments (once a year) only have `gross` and count toward the annual gross
-- `colors` is optional (person colors, set on the edit page)
+- `colors` is optional (person colors, set while editing)
 - `"b": ""` means a budget of one person; then every entry belongs to person `a`
 - You can edit the file by hand (best while Home Assistant is stopped); the changes are read when Home Assistant starts. If the file cannot be read, the card shows an error, a repair notice appears and saving is blocked until the file is fixed, so it is never overwritten by accident
 - The file is part of every Home Assistant backup. Removing the integration keeps the file

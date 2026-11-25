@@ -12,7 +12,7 @@ export const saveBudget = async (hass, data) => (await hass.callWS({ type: `${WS
 export const onBudgetSaved = (hass, callback) => hass.connection.subscribeMessage(callback, { type: `${WS}/subscribe` });
 
 /**
- * Facts about the running integration: { version, edit_path, limits }.
+ * Facts about the running integration: { version, limits }.
  * An integration older than 0.3.0 only answers with the version.
  */
 export const getInfo = (hass) => hass.callWS({ type: `${WS}/version` });

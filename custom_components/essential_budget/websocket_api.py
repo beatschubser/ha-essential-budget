@@ -1,4 +1,4 @@
-"""WebSocket commands used by the card and the edit page."""
+"""WebSocket commands used by the card."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from homeassistant.components.websocket_api import ActiveConnection
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import DATA_FILE, DATA_VERSION, DOMAIN, EDIT_PATH, ISSUE_INVALID_FILE, SIGNAL_CHANGED
+from .const import DATA_FILE, DATA_VERSION, DOMAIN, ISSUE_INVALID_FILE, SIGNAL_CHANGED
 from .logic import LIMITS, BudgetError
 from .store import DATA_STORE, BudgetStore
 
@@ -42,10 +42,9 @@ def with_store(func: Callable[[HomeAssistant, ActiveConnection, dict, BudgetStor
 def ws_version(hass: HomeAssistant, connection: ActiveConnection, msg: dict) -> None:
     """Facts about the running integration.
 
-    The card compares the version with its own after updates, opens the edit page
-    at "edit_path" and uses the limits for its fields.
+    The card compares the version with its own after updates and uses the limits for its fields.
     """
-    connection.send_result(msg["id"], {"version": hass.data[DATA_VERSION], "edit_path": f"/{EDIT_PATH}", "limits": LIMITS})
+    connection.send_result(msg["id"], {"version": hass.data[DATA_VERSION], "limits": LIMITS})
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/subscribe"})

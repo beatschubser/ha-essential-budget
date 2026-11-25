@@ -133,7 +133,7 @@ export const validateDraft = (draft, limits) => {
         if (value !== undefined) item[field] = value;
       }
       // the month of a debit only matters for fixed costs that are not paid monthly, and only with a day
-      if (list === TAB_COSTS && (item.interval_months === 1 || item.due_day === undefined)) delete item.due_month;
+      if (list === LIST_COSTS && (item.interval_months === 1 || item.due_day === undefined)) delete item.due_month;
       return item;
     });
   }
@@ -171,28 +171,40 @@ export const renameCategory = (draft, from, to) => {
   return name;
 };
 
-/* ---------- Tabs of the edit page ---------- */
+/* ---------- Persons and categories ---------- */
 
-export const TAB_SHARED = "shared_income";
-export const TAB_COSTS = "fixed_costs";
+export const LIST_SHARED = "shared_income";
+export const LIST_COSTS = "fixed_costs";
 
 const personHasEntries = (draft, p) => [...draft.income, ...draft.special_payments].some((row) => row.person === p);
 
 /**
- * { persons, shared, keys }: one tab per person, joint income, fixed costs.
- * The second person's tab stays while it has entries (so they can be removed after clearing the name);
- * with one person joint income is only shown while it has entries.
+ * The persons shown while editing: the first one, and the second one while it has a name or entries
+ * (so they can be removed after clearing the name) or was just added.
  */
-export const editTabs = (draft, addingPerson = false) => {
-  const active = activePersons(draft.persons);
-  const persons = ["a", ...(active.includes("b") || personHasEntries(draft, "b") || addingPerson ? ["b"] : [])];
-  const shared = active.length > 1 || draft.shared_income.length > 0;
-  return { persons, shared, keys: [...persons, ...(shared ? [TAB_SHARED] : []), TAB_COSTS] };
+export const editPersons = (draft, adding = false) =>
+  activePersons(draft.persons).includes("b") || personHasEntries(draft, "b") || adding ? ["a", "b"] : ["a"];
+
+/**
+ * Removes the second person: its income and special payments are deleted,
+ * its fixed costs and the joint income it receives go to the first person.
+ */
+export const removeSecondPerson = (draft) => {
+  draft.income = draft.income.filter((row) => row.person !== "b");
+  draft.special_payments = draft.special_payments.filter((row) => row.person !== "b");
+  draft.shared_income.forEach((row) => (row.to = "a"));
+  draft.fixed_costs.forEach((row) => (row.person = "a"));
+  draft.persons.b = "";
+  delete draft.colors.b;
 };
 
-/** Where a problem of validateDraft is edited: { tab, category } (category only for fixed costs). */
-export const problemPlace = (draft, { list, id }) => {
-  const row = draft[list].find((r) => r._id === id);
-  if (list === TAB_COSTS) return { tab: TAB_COSTS, category: categoryOf(row) };
-  return { tab: list === TAB_SHARED ? TAB_SHARED : row.person };
+/** Deletes a category with all its fixed costs. */
+export const deleteCategory = (draft, category) => {
+  draft.fixed_costs = draft.fixed_costs.filter((row) => categoryOf(row) !== category);
+};
+
+/** The category a problem of validateDraft is in (fixed costs are edited in the detail view of their category), else null. */
+export const problemCategory = (draft, { list, id }) => {
+  if (list !== LIST_COSTS) return null;
+  return categoryOf(draft[list].find((row) => row._id === id));
 };

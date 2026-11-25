@@ -238,7 +238,9 @@ export const EDIT_STYLE = `
   /* Interval "N months": looks like the text of the frequency select, with an invisible select over the chevron as menu */
   /* Debit date: day and (not monthly) month side by side; the label is only shown on narrow pages */
   .due { display: flex; gap: 6px; }
-  .field .due .due-day { flex: 0 0 52px; width: 52px; text-align: center; }
+  .due-day-frame { flex: 0 0 56px; width: 56px; }
+  .field .due .money .due-day { padding: 0 0 0 6px; text-align: right; }
+  .due-day-frame .cur { padding: 0 12px 0 1px; color: var(--primary-text-color); }
   .field .due select { flex: 1; }
 
   .field.f-freq .money input { flex: 0 0 auto; padding: 0 0 0 10px; box-sizing: content-box; text-align: left; }

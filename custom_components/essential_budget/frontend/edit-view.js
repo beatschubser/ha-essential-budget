@@ -58,13 +58,15 @@ const intervalField = (row, ctx) => {
 const dueField = (row, ctx) => {
   const { t, fmt } = ctx;
   const day = `<input class="due-day" type="text" inputmode="numeric" autocomplete="off" maxlength="2" placeholder="${esc(t("due_day"))}" aria-label="${esc(`${t("due")}: ${t("due_day")}`)}" ${rowAttrs(TAB_COSTS, row, "due_day")} value="${esc(row.due_day)}">`;
+  // the day reads like a date: "15."
+  const dayField = `<span class="money due-day-frame">${day}<span class="cur" aria-hidden="true">.</span></span>`;
   const months = [...Array(12)]
     .map((_, i) => `<option value="${i + 1}" ${String(row.due_month) === String(i + 1) ? "selected" : ""}>${esc(fmt.month(i + 1))}</option>`)
     .join("");
   const month = isMonthlyRow(row)
     ? ""
     : `<select aria-label="${esc(`${t("due")}: ${t("due_month")}`)}" ${rowAttrs(TAB_COSTS, row, "due_month")}><option value="">${esc(t("due_month"))}</option>${months}</select>`;
-  return `<div class="field f-due"><span class="label">${esc(t("due"))}</span><span class="due">${day}${month}</span></div>`;
+  return `<div class="field f-due"><span class="label">${esc(t("due"))}</span><span class="due">${dayField}${month}</span></div>`;
 };
 
 const removeButton = (list, row, ctx) =>

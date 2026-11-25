@@ -7,8 +7,10 @@ import { CARD_EDITOR_STYLE } from "./styles.js";
 
 export const DEFAULT_PRIVACY_SECONDS = 30; // privacy mode: numbers are hidden again after this time
 export const MIN_PRIVACY_SECONDS = 5;
+export const DEFAULT_UPCOMING_DAYS = 7; // box "Next debits" of the overview: days ahead (0 = no box)
+export const MAX_UPCOMING_DAYS = 60;
 
-const LABELS = { title: "title_optional", privacy: "privacy", privacy_seconds: "privacy_seconds" }; // field -> text
+const LABELS = { title: "title_optional", upcoming_days: "upcoming_days", privacy: "privacy", privacy_seconds: "privacy_seconds" }; // field -> text
 
 class EssentialBudgetCardEditor extends HTMLElement {
   setConfig(config) {
@@ -30,6 +32,7 @@ class EssentialBudgetCardEditor extends HTMLElement {
       const config = { ...this._config, ...e.detail.value };
       // only values that differ from the defaults are stored
       if (!config.title) delete config.title;
+      if (config.upcoming_days === undefined || Number(config.upcoming_days) === DEFAULT_UPCOMING_DAYS) delete config.upcoming_days;
       if (!config.privacy) delete config.privacy;
       if (!config.privacy || !config.privacy_seconds || Number(config.privacy_seconds) === DEFAULT_PRIVACY_SECONDS) delete config.privacy_seconds;
       this._config = config;
@@ -54,6 +57,7 @@ class EssentialBudgetCardEditor extends HTMLElement {
     this._form.hass = this._hass;
     this._form.schema = [
       { name: "title", selector: { text: {} } },
+      { name: "upcoming_days", selector: { number: { min: 0, max: MAX_UPCOMING_DAYS, mode: "box" } } },
       { name: "privacy", selector: { boolean: {} } },
       // the delay only matters with the privacy mode
       ...(this._config.privacy
@@ -62,6 +66,7 @@ class EssentialBudgetCardEditor extends HTMLElement {
     ];
     this._form.data = {
       title: this._config.title || "",
+      upcoming_days: this._config.upcoming_days ?? DEFAULT_UPCOMING_DAYS,
       privacy: !!this._config.privacy,
       privacy_seconds: Number(this._config.privacy_seconds) || DEFAULT_PRIVACY_SECONDS,
     };

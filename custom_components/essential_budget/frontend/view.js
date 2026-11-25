@@ -6,8 +6,9 @@ import { JOINT_COLOR, categoryLabel, pct } from "./model.js";
 
 /*
  * ctx (what the functions need besides the model):
- * { t, fmt, title, isAdmin, numbersShown, open, hasSchedule }
- * with t = translator, fmt = formatter, open = Set of expanded categories, hasSchedule = a fixed cost has a debit date
+ * { t, fmt, title, isAdmin, numbersShown, open, hasSchedule, upcoming, month }
+ * with t = translator, fmt = formatter, open = Set of expanded categories, hasSchedule = a fixed cost has a debit date,
+ * upcoming = { days, items } for the box "Next debits" of the overview (null = no box), month = month chosen in the debits by month
  */
 
 const money = (ctx, value) => numSpan(ctx.fmt.money(value));
@@ -135,7 +136,8 @@ const renderFixedCosts = (m, ctx) => {
 export const renderView = (m, ctx) => {
   if (m.empty) return renderEmpty(ctx);
   const left = renderMonthlyNet(m, ctx) + renderAnnualGross(m, ctx) + renderBudgetPerPerson(m, ctx);
-  return `${renderHeader(ctx)}${renderKeyFigures(m, ctx)}<div class="columns"><div class="column">${left}</div><div class="column costs">${renderFixedCosts(m, ctx)}</div></div>`;
+  const right = renderFixedCosts(m, ctx) + renderUpcoming(m, ctx);
+  return `${renderHeader(ctx)}${renderKeyFigures(m, ctx)}<div class="columns"><div class="column">${left}</div><div class="column costs">${right}</div></div>`;
 };
 
 /** The detail view of one category: its sums and a table of its fixed costs (a list on narrow cards). */
@@ -197,15 +199,13 @@ const renderMonthBars = (s, m, ctx) => {
   return `<div class="box">${sectionHead("mdi:chart-bar", t("show_schedule"))}<div class="months">${bars}</div>${legend}</div>`;
 };
 
-/** The debits of the chosen month, or of the next days. */
-const renderDebits = (s, m, ctx) => {
+/** A row per debit: date, name, category (and person), amount. */
+const debitRows = (items, m, ctx) => {
   const { t, fmt } = ctx;
-  const month = ctx.month === null ? null : s.months[ctx.month];
-  const items = month ? month.items : s.upcoming;
-  const title = month ? fmt.monthYear(month.year, month.month) : t("next_days", { n: s.days });
+  if (!items.length) return `<div class="msg">${esc(t("no_debits"))}</div>`;
   const color = Object.fromEntries(m.groups.map((g) => [g.category, g.color]));
   const person = Object.fromEntries(m.people.map((p) => [p.key, p]));
-  const rows = items
+  return items
     .map(
       ({ cost, date }) => `<div class="debit">
         <span class="debit-date">${esc(fmt.date(date))}</span>
@@ -217,13 +217,30 @@ const renderDebits = (s, m, ctx) => {
       </div>`,
     )
     .join("");
-  const total = month
-    ? money(ctx, month.total)
-    : money(
-        ctx,
-        items.reduce((sum, d) => sum + d.cost.amount, 0),
-      );
-  return `<div class="box">${sectionHead("mdi:calendar-arrow-right", title, total)}${rows || `<div class="msg">${esc(t("no_debits"))}</div>`}</div>`;
+};
+
+const debitsTotal = (ctx, items) =>
+  money(
+    ctx,
+    items.reduce((total, d) => total + d.cost.amount, 0),
+  );
+
+/** The debits of the chosen month, or of the next days. */
+const renderDebits = (s, m, ctx) => {
+  const { t, fmt } = ctx;
+  const month = ctx.month === null ? null : s.months[ctx.month];
+  const items = month ? month.items : s.upcoming;
+  const title = month ? fmt.monthYear(month.year, month.month) : t("next_days", { n: s.days });
+  return `<div class="box">${sectionHead("mdi:calendar-arrow-right", title, debitsTotal(ctx, items))}${debitRows(items, m, ctx)}</div>`;
+};
+
+/** Overview: the debits of the next days below the fixed costs; the button opens the debits by month. */
+const renderUpcoming = (m, ctx) => {
+  const { t, upcoming } = ctx;
+  if (!upcoming) return "";
+  const all = `<button class="add" data-action="schedule"><ha-icon icon="mdi:calendar-month-outline"></ha-icon>${esc(t("show_schedule"))}</button>`;
+  return `<div class="box">${sectionHead("mdi:calendar-arrow-right", t("upcoming"), debitsTotal(ctx, upcoming.items), t("next_days", { n: upcoming.days }))}
+    ${debitRows(upcoming.items, m, ctx)}${all}</div>`;
 };
 
 /** The debits by month: key figures, a bar per month for the next 12 months and the list of debits. */

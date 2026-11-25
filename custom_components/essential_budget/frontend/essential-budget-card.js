@@ -20,7 +20,7 @@
  */
 
 import { getBudget, getInfo, onBudgetSaved } from "./api.js";
-import { DEFAULT_PRIVACY_SECONDS, MIN_PRIVACY_SECONDS } from "./card-editor.js";
+import { DEFAULT_PRIVACY_SECONDS, DEFAULT_UPCOMING_DAYS, MAX_UPCOMING_DAYS, MIN_PRIVACY_SECONDS } from "./card-editor.js";
 import { downloadExcel } from "./export.js";
 import { formatter, localeOf, translator } from "./format.js";
 import { errorText, esc } from "./html.js";
@@ -239,6 +239,9 @@ class EssentialBudgetCard extends HTMLElement {
     const model = buildModel(this._data);
     const schedule = buildSchedule(this._data);
     ctx.hasSchedule = schedule.any;
+    // box "Next debits" of the overview (card option upcoming_days, 0 = no box)
+    const days = Math.min(MAX_UPCOMING_DAYS, Math.max(0, Math.round(Number(this._config.upcoming_days ?? DEFAULT_UPCOMING_DAYS)) || 0));
+    ctx.upcoming = schedule.any && days ? { days, items: buildSchedule(this._data, new Date(), days).upcoming } : null;
     if (this._schedule && schedule.any) return renderSchedule(model, schedule, ctx);
     this._schedule = false; // no debit dates (any more)
     const group = this._detail !== null && model.groups.find((g) => g.category === this._detail);

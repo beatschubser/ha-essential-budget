@@ -15,7 +15,7 @@ A static household budget for Home Assistant, for one or two persons: monthly ne
 - **Free budget per person** (with two persons): own income + joint income received by the person − fixed costs paid by the person; negative values are shown in red
 - **Annual gross** in its own box, per person: 12 × the monthly gross of the income + the gross of the special payments
 - **Own edit page:** income and fixed costs are edited on their own page, the card on the dashboard only shows the budget (administrators only, no sidebar entry)
-- **Debit dates (optional):** give a fixed cost the day it is debited (and, if it is not paid monthly, a month with a debit; the others follow the interval). The calendar icon at the top of the card then shows the debits of the next 12 months as bars next to the monthly average, and the debits of the next 30 days or of a chosen month. Intervals that do not fit into a year (e.g. every 5 months) are counted from the chosen month in every year
+- **Debit dates (optional):** give a fixed cost the day it is debited (and, if it is not paid monthly, a month with a debit; the others follow the interval). The calendar icon at the top of the card then shows the debits of the next 12 months as bars next to the monthly average, and the debits of the next 30 days or of a chosen month. Below the fixed costs a box shows the debits of the next days (7 by default, set in the card options) Intervals that do not fit into a year (e.g. every 5 months) are counted from the chosen month in every year
 - **Excel export:** the Excel icon at the top right of the card downloads the income and the fixed costs as an Excel file (with sums and formulas; with debit dates also the debits by month); the gear next to it opens the edit page (administrators only)
 - **Show/hide numbers:** the eye icon at the top of the card blurs all numbers until it is tapped again or the page is reloaded
 - **Privacy mode** (optional): the numbers start hidden; after tapping the eye icon they are hidden again after a set time (default 30 seconds), when the app or browser tab goes to the background and when you tap again
@@ -35,6 +35,7 @@ The card is registered automatically. Add it to a dashboard with **Add card > Es
 ```yaml
 type: custom:essential-budget-card
 title: Budget          # optional
+upcoming_days: 7       # optional: box "Next debits" below the fixed costs, days ahead (0 = no box)
 privacy: true          # optional: numbers hidden until the eye icon is tapped
 privacy_seconds: 60    # optional: hide the numbers again after (default 30)
 ```

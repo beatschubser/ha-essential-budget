@@ -1,6 +1,6 @@
 /* The edit page as HTML: tabs per person, joint income and fixed costs (in category tabs), and the footer with the save button. */
 
-import { TAB_COSTS, TAB_SHARED, costsOfCategory, INTERVALS } from "./draft.js";
+import { TAB_COSTS, TAB_SHARED, costsOfCategory, INTERVALS, isMonthlyRow } from "./draft.js";
 import { esc, iconButton, sectionHead } from "./html.js";
 import { PERSONS, activePersons, categoryLabel, personColor, personLabel } from "./model.js";
 
@@ -52,6 +52,19 @@ const intervalField = (row, ctx) => {
   if (!row._custom) return `<div class="field f-freq">${select(t("frequency"))}</div>`;
   const width = Math.max(1, String(row.interval_months).length) + 0.4;
   return `<div class="field f-freq"><span class="money"><input type="text" inputmode="numeric" autocomplete="off" maxlength="3" aria-label="${esc(t("interval_label"))}" data-bind="interval" ${place} data-field="interval_months" value="${esc(row.interval_months)}" style="width:${width}ch"><span class="months" aria-hidden="true">${esc(t("months"))}</span><span class="freq-menu"><ha-icon icon="mdi:chevron-down"></ha-icon>${select(t("frequency"))}</span></span></div>`;
+};
+
+/** Debit date: the day, and for fixed costs that are not paid monthly the month of a debit (the others follow the interval). */
+const dueField = (row, ctx) => {
+  const { t, fmt } = ctx;
+  const day = `<input class="due-day" type="text" inputmode="numeric" autocomplete="off" maxlength="2" placeholder="${esc(t("due_day"))}" aria-label="${esc(`${t("due")}: ${t("due_day")}`)}" ${rowAttrs(TAB_COSTS, row, "due_day")} value="${esc(row.due_day)}">`;
+  const months = [...Array(12)]
+    .map((_, i) => `<option value="${i + 1}" ${String(row.due_month) === String(i + 1) ? "selected" : ""}>${esc(fmt.month(i + 1))}</option>`)
+    .join("");
+  const month = isMonthlyRow(row)
+    ? ""
+    : `<select aria-label="${esc(`${t("due")}: ${t("due_month")}`)}" ${rowAttrs(TAB_COSTS, row, "due_month")}><option value="">${esc(t("due_month"))}</option>${months}</select>`;
+  return `<div class="field f-due"><span class="label">${esc(t("due"))}</span><span class="due">${day}${month}</span></div>`;
 };
 
 const removeButton = (list, row, ctx) =>
@@ -174,13 +187,14 @@ const costsSection = (draft, categories, state, ctx) => {
   const cls = `costs ${single ? "single" : ""}`;
   return `<div class="box">${sectionHead("mdi:receipt-text-outline", t("fixed_costs"))}
     ${categoryTabs(categories, state, ctx)}
-    ${headRow(cls, rows, [["name", t("name")], ["amount", t("amount")], ["freq", t("frequency")], ...(single ? [] : [["person", t("paid_by")]])])}
+    ${headRow(cls, rows, [["name", t("name")], ["amount", t("amount")], ["freq", t("frequency")], ["due", t("due")], ...(single ? [] : [["person", t("paid_by")]])])}
     ${rows
       .map((r) =>
         row(cls, r, [
           nameInput(list, r, ctx),
           amountInput(list, r, "amount", t("amount"), ctx),
           intervalField(r, ctx),
+          dueField(r, ctx),
           single ? "" : personSelect(list, r, "person", t("paid_by"), draft, ctx),
           removeButton(list, r, ctx),
         ]),

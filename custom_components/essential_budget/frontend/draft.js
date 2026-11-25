@@ -9,13 +9,22 @@ export const INTERVALS = [1, 3, 12]; // months between two payments offered as c
 
 /*
  * Fields of every list in the order of the file (same as LISTS in logic.py) with their type:
- * text, person, amount (empty = 0), amount? (empty = not set), interval (months).
+ * text, person, amount (empty = 0), amount? (empty = not set), interval (months),
+ * day (day of the month 1..31, empty = not set), month (1..12, empty = not set).
  */
 export const SCHEMA = {
   income: { name: "text", person: "person", gross: "amount?", amount: "amount" },
   special_payments: { name: "text", person: "person", gross: "amount" },
   shared_income: { name: "text", to: "person", amount: "amount" },
-  fixed_costs: { name: "text", category: "text", person: "person", amount: "amount", interval_months: "interval" },
+  fixed_costs: {
+    name: "text",
+    category: "text",
+    person: "person",
+    amount: "amount",
+    interval_months: "interval",
+    due_day: "day",
+    due_month: "month",
+  },
 };
 export const LISTS = Object.keys(SCHEMA);
 
@@ -50,23 +59,32 @@ export const parseAmount = (text) => {
 /** A whole number of months from 1 to max (the limit of the integration, if known). */
 export const validInterval = (text, max = Infinity) => /^\s*\d+\s*$/.test(String(text)) && Number(text) >= 1 && Number(text) <= max;
 
+/** A day of the month, or empty (no debit date). */
+export const validDay = (text) => isEmpty(text) || (/^\s*\d+\s*$/.test(String(text)) && Number(text) >= 1 && Number(text) <= 31);
+
 /** Can the text of a field be saved? limits = the limits of the integration (see api.getInfo). */
 export const fieldValid = (type, text, limits) => {
   if (isAmount(type)) return parseAmount(text) !== null;
   if (type === "interval") return validInterval(text, limits?.interval);
+  if (type === "day") return validDay(text);
   return true;
 };
+
+/** Is a draft row of the fixed costs paid monthly? (Its debit then needs no month.) */
+export const isMonthlyRow = (row) => Number(row.interval_months) === 1;
 
 // Text of a draft field for a saved value, and back (undefined = the field is left out)
 const toText = (type, value, amountText) => {
   if (isAmount(type)) return value == null ? "" : amountText(value);
   if (type === "interval") return String(value ?? 1);
+  if (type === "day" || type === "month") return value == null ? "" : String(value);
   return value ?? "";
 };
 const toValue = (type, text) => {
   if (type === "amount") return parseAmount(text) ?? 0;
   if (type === "amount?") return isEmpty(text) ? undefined : (parseAmount(text) ?? undefined);
   if (type === "interval") return Number(text) || 1;
+  if (type === "day" || type === "month") return isEmpty(text) ? undefined : Number(text);
   return text;
 };
 
@@ -112,6 +130,8 @@ export const validateDraft = (draft, limits) => {
         const value = toValue(type, row[field]);
         if (value !== undefined) item[field] = value;
       }
+      // the month of a debit only matters for fixed costs that are not paid monthly, and only with a day
+      if (list === TAB_COSTS && (item.interval_months === 1 || item.due_day === undefined)) delete item.due_month;
       return item;
     });
   }

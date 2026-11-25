@@ -90,6 +90,9 @@ def test_invalid() -> None:
         ({"income": {}}, "income: list"),
         ({"special_payments": [{"name": "X", "person": "a", "gross": -1}]}, "special_payments 1: gross"),
         ({"income": [{"name": "X", "person": "a", "amount": 1, "gross": -5}]}, "income 1: gross"),
+        ({"fixed_costs": [{"name": "X", "person": "a", "amount": 1, "due_day": 32}]}, "fixed_costs 1: due_day"),
+        ({"fixed_costs": [{"name": "X", "person": "a", "amount": 1, "due_day": 0}]}, "fixed_costs 1: due_day"),
+        ({"fixed_costs": [{"name": "X", "person": "a", "amount": 1, "interval_months": 3, "due_day": 1, "due_month": 13}]}, "due_month"),
         ([], "object expected"),
     ]
     for data, expected in cases:
@@ -99,6 +102,24 @@ def test_invalid() -> None:
             assert expected in str(err), (expected, str(err))
         else:
             raise AssertionError(f"accepted: {data}")
+
+
+def test_due_dates() -> None:
+    cost = {"name": "X", "person": "a", "amount": 30}
+    costs = validate(
+        {
+            "fixed_costs": [
+                {**cost, "interval_months": 3, "due_day": 15, "due_month": 2},
+                {**cost, "interval_months": 1, "due_day": 31, "due_month": 5},  # monthly: no month
+                {**cost, "interval_months": 12, "due_month": 5},  # month without day: dropped
+                {**cost, "due_day": ""},  # empty: not set
+            ]
+        }
+    )["fixed_costs"]
+    assert costs[0]["due_day"] == 15 and costs[0]["due_month"] == 2
+    assert costs[1]["due_day"] == 31 and "due_month" not in costs[1]
+    assert "due_day" not in costs[2] and "due_month" not in costs[2]
+    assert "due_day" not in costs[3]
 
 
 if __name__ == "__main__":

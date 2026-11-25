@@ -20,7 +20,9 @@ File format (.storage/essential_budget.json), amounts in the currency of Home As
 - annual gross of a person = 12 × gross of the income + gross of the special payments
 - shared_income: income of both (e.g. child benefit); "to" = the person whose account receives it
 - fixed_costs: amount per payment, paid every "interval_months" months (1 = monthly, 3 = quarterly,
-  12 = yearly, up to 120); "person" pays it.
+  12 = yearly, up to 120); "person" pays it. Optional: "due_day" (1..31, 31 = last day of the month) and,
+  for fixed costs that are not paid monthly, "due_month" (1..12, a month with a debit; the others follow
+  the interval), e.g. {"interval_months": 3, "due_day": 15, "due_month": 2} = 15 Feb, May, Aug and Nov.
 """
 
 from __future__ import annotations
@@ -118,6 +120,25 @@ def _interval(value: Any, where: str, persons: tuple[str, ...]) -> int:
     return int(value)
 
 
+def _optional_whole(value: Any, where: str, low: int, high: int) -> int | None:
+    """A whole number from low to high; empty means: not set (the field is left out)."""
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != int(value) or not low <= value <= high:
+        raise BudgetError(f"{where}: whole number from {low} to {high} expected")
+    return int(value)
+
+
+def _due_day(value: Any, where: str, persons: tuple[str, ...]) -> int | None:
+    """Day of the month a fixed cost is debited (31 = the last day of every month)."""
+    return _optional_whole(value, where, 1, 31)
+
+
+def _due_month(value: Any, where: str, persons: tuple[str, ...]) -> int | None:
+    """Month of a debit of a fixed cost that is not paid monthly (1 = January); the others follow its interval."""
+    return _optional_whole(value, where, 1, 12)
+
+
 Check = Callable[[Any, str, tuple[str, ...]], Any]
 
 # Fields of every list in the order they are written to the file, each with its check.
@@ -126,7 +147,15 @@ LISTS: dict[str, dict[str, Check]] = {
     "income": {"name": _name, "person": _person, "gross": _optional_amount, "amount": _amount},
     "special_payments": {"name": _name, "person": _person, "gross": _amount},
     "shared_income": {"name": _name, "to": _person, "amount": _amount},
-    "fixed_costs": {"name": _name, "category": _category, "person": _person, "amount": _amount, "interval_months": _interval},
+    "fixed_costs": {
+        "name": _name,
+        "category": _category,
+        "person": _person,
+        "amount": _amount,
+        "interval_months": _interval,
+        "due_day": _due_day,
+        "due_month": _due_month,
+    },
 }
 
 
@@ -158,6 +187,9 @@ def _item(list_key: str, raw: Any, index: int, persons: tuple[str, ...]) -> dict
         value = check(raw.get(field), f"{where}: {field}", persons)
         if value is not None:
             item[field] = value
+    # the month of the debit only matters for fixed costs that are not paid monthly, and only with a day
+    if item.get("interval_months") == 1 or "due_day" not in item:
+        item.pop("due_month", None)
     return item
 
 

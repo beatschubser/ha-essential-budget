@@ -1,18 +1,20 @@
-/* The view of the card as HTML: header, overview and the detail view of a category. Pure functions of the model. */
+/* The view of the card as HTML: header, overview, the detail view of a category and the debits by month. Pure functions of the model. */
 
+import { dueText } from "./format.js";
 import { esc, iconButton, numSpan, sectionHead } from "./html.js";
 import { JOINT_COLOR, categoryLabel, pct } from "./model.js";
 
 /*
  * ctx (what the functions need besides the model):
- * { t, fmt, title, isAdmin, numbersShown, open } with t = translator, fmt = formatter, open = Set of expanded categories
+ * { t, fmt, title, isAdmin, numbersShown, open, hasSchedule }
+ * with t = translator, fmt = formatter, open = Set of expanded categories, hasSchedule = a fixed cost has a debit date
  */
 
 const money = (ctx, value) => numSpan(ctx.fmt.money(value));
 const percent = (part, whole) => numSpan(`${pct(part, whole)} %`);
 const barWidth = (value, max) => (max ? (value / max) * 100 : 0);
 
-/** Title (optional) and the buttons: show/hide numbers at the left, Excel download and (admins) the edit page at the right. */
+/** Title (optional) and the buttons: show/hide numbers at the left, debits by month, Excel download and (admins) the edit page at the right. */
 export const renderHeader = (ctx, buttons = true) => {
   const { t, title, isAdmin, numbersShown } = ctx;
   const heading = title ? `<h1 class="title">${esc(title)}</h1>` : "";
@@ -25,6 +27,7 @@ export const renderHeader = (ctx, buttons = true) => {
     attrs: `aria-pressed="${!numbersShown}"`,
   });
   const actions =
+    (ctx.hasSchedule ? iconButton({ action: "schedule", icon: "mdi:calendar-month-outline", label: t("show_schedule") }) : "") +
     iconButton({ action: "export", icon: "mdi:microsoft-excel", label: t("export") }) +
     (isAdmin ? iconButton({ action: "openedit", icon: "mdi:cog-outline", label: t("edit_title") }) : "");
   return `<div class="header">${eye}${heading}<div class="actions">${actions}</div></div>`;
@@ -143,17 +146,19 @@ export const renderDetail = (m, g, ctx) => {
     .map((c) => {
       const person = m.people.find((p) => p.key === c.person);
       const freq = esc(t.freq(c.interval_months));
-      return `<div class="drow">
+      const due = esc(dueText(c, t, ctx.fmt));
+      return `<div class="drow ${due ? "" : "no-due"}">
         <span class="d-name strong">${esc(c.name)}</span>
         <span class="d-person"><span class="chip" style="--c:${person?.color}">${esc(person?.name)}</span></span>
         <span class="d-freq">${freq}</span>
+        <span class="d-due">${due ? `<span class="narrow-only">${esc(t("due"))}: </span>${due}` : ""}</span>
         <span class="d-paid"><span class="narrow-only">${money(ctx, c.amount)} ${freq}</span><span class="wide-only">${money(ctx, c.amount)}</span></span>
         <span class="d-month strong">${money(ctx, c.monthly)}<span class="narrow-only muted small"> ${esc(t("per_month"))}</span></span>
         <span class="d-year">${money(ctx, c.monthly * 12)}<span class="narrow-only"> ${esc(t("per_year"))}</span></span>
       </div>`;
     })
     .join("");
-  const head = ["name:item", "person:person", "freq:frequency", "paid:per_payment", "month:per_month", "year:per_year"]
+  const head = ["name:item", "person:person", "freq:frequency", "due:due", "paid:per_payment", "month:per_month", "year:per_year"]
     .map((pair) => pair.split(":"))
     .map(([cls, key]) => `<span class="d-${cls}">${esc(t(key))}</span>`)
     .join("");
@@ -167,4 +172,77 @@ export const renderDetail = (m, g, ctx) => {
       ${rows}
       <div class="drow dsum"><span class="d-name">${esc(t("sum"))}</span><span class="d-month">${money(ctx, g.sum)}</span><span class="d-year">${money(ctx, g.sum * 12)}</span></div>
     </div>`;
+};
+
+/* ---------- Debits by month ---------- */
+
+/** A bar per month (tap = its debits below); the dashed line is the monthly average of the fixed costs. */
+const renderMonthBars = (s, m, ctx) => {
+  const { t, fmt } = ctx;
+  const max = Math.max(...s.months.map((month) => month.total), m.costTotal, 1);
+  // the average is drawn as a dashed mark in every bar, together they form a line
+  const average = `<b class="avg" style="bottom:${(m.costTotal / max) * 100}%"></b>`;
+  const bars = s.months
+    .map((month, i) => {
+      const label = `${fmt.monthYear(month.year, month.month)}: ${fmt.money(month.total)}`;
+      const cls = `${i === 0 ? "now" : ""} ${i === ctx.month ? "selected" : ""}`;
+      return `<button class="mbar ${cls}" data-action="month" data-key="${i}" aria-pressed="${i === ctx.month}" aria-label="${esc(label)}" title="${esc(label)}">
+        <span class="mbar-value">${money(ctx, month.total)}</span>
+        <span class="mbar-track"><i style="height:${(month.total / max) * 100}%"></i>${average}</span>
+        <span class="mbar-label">${esc(fmt.month(month.month))}</span>
+      </button>`;
+    })
+    .join("");
+  const legend = `<div class="legend"><b class="avg-key"></b>${esc(t("average_month"))}</div>`;
+  return `<div class="box">${sectionHead("mdi:chart-bar", t("show_schedule"))}<div class="months">${bars}</div>${legend}</div>`;
+};
+
+/** The debits of the chosen month, or of the next days. */
+const renderDebits = (s, m, ctx) => {
+  const { t, fmt } = ctx;
+  const month = ctx.month === null ? null : s.months[ctx.month];
+  const items = month ? month.items : s.upcoming;
+  const title = month ? fmt.monthYear(month.year, month.month) : t("next_days", { n: s.days });
+  const color = Object.fromEntries(m.groups.map((g) => [g.category, g.color]));
+  const person = Object.fromEntries(m.people.map((p) => [p.key, p]));
+  const rows = items
+    .map(
+      ({ cost, date }) => `<div class="debit">
+        <span class="debit-date">${esc(fmt.date(date))}</span>
+        <span class="debit-main"><span class="ellipsis strong">${esc(cost.name)}</span>
+          <span class="debit-sub"><span class="dot" style="background:${color[cost.category]}"></span><span class="ellipsis">${esc(categoryLabel(cost.category, t))}</span>${
+            m.single ? "" : `<span class="chip" style="--c:${person[cost.person]?.color}">${esc(person[cost.person]?.name)}</span>`
+          }</span></span>
+        <span class="debit-value strong">${money(ctx, cost.amount)}</span>
+      </div>`,
+    )
+    .join("");
+  const total = month
+    ? money(ctx, month.total)
+    : money(
+        ctx,
+        items.reduce((sum, d) => sum + d.cost.amount, 0),
+      );
+  return `<div class="box">${sectionHead("mdi:calendar-arrow-right", title, total)}${rows || `<div class="msg">${esc(t("no_debits"))}</div>`}</div>`;
+};
+
+/** The debits by month: key figures, a bar per month for the next 12 months and the list of debits. */
+export const renderSchedule = (m, s, ctx) => {
+  const { t, fmt } = ctx;
+  const tile = (label, value, sub = "") =>
+    `<div class="box kpi small"><span class="label">${esc(label)}</span><span class="value">${value}</span>${sub ? `<span class="sub">${esc(sub)}</span>` : ""}</div>`;
+  const highest = s.months.reduce((a, b) => (b.total > a.total ? b : a));
+  const missing = s.missing.length ? `<div class="hint flat">${esc(t("missing_due", { n: s.missing.length }))}</div>` : "";
+  return `<div class="detail-head">
+      ${iconButton({ action: "back", icon: "mdi:arrow-left", label: t("back"), cls: "round" })}
+      <h1 class="title grow">${esc(t("schedule"))}</h1>
+    </div>
+    <div class="kpis detail">
+      ${tile(t("this_month"), money(ctx, s.months[0].total), fmt.monthYear(s.months[0].year, s.months[0].month))}
+      ${tile(t("highest_month"), money(ctx, highest.total), fmt.monthYear(highest.year, highest.month))}
+      ${tile(t("average_month"), money(ctx, m.costTotal))}
+    </div>
+    ${renderMonthBars(s, m, ctx)}
+    ${renderDebits(s, m, ctx)}
+    ${missing}`;
 };

@@ -24,19 +24,19 @@ import { DEFAULT_PRIVACY_SECONDS, MIN_PRIVACY_SECONDS } from "./card-editor.js";
 import { downloadExcel } from "./export.js";
 import { formatter, localeOf, translator } from "./format.js";
 import { errorText, esc } from "./html.js";
-import { buildModel } from "./model.js";
+import { buildModel, buildSchedule } from "./model.js";
 import { openEditPage } from "./navigation.js";
 import "./panel.js";
 import { BASE_STYLE, VIEW_STYLE } from "./styles.js";
 import { reloadPage, renderUpdate, setOwnVersion, updateState } from "./version.js";
-import { renderDetail, renderView } from "./view.js";
+import { renderDetail, renderSchedule, renderView } from "./view.js";
 
 const VERSION = new URL(import.meta.url).searchParams.get("v"); // set by the integration from manifest.json
 setOwnVersion(VERSION);
 
 /* Clicks: data-action of the clicked element -> what happens (card = the card, data = its data attributes). */
 const ACTIONS = {
-  export: (card) => downloadExcel(card._data, translator(card._hass), formatter(card._hass).symbol),
+  export: (card) => downloadExcel(card._data, translator(card._hass), formatter(card._hass)),
   openedit: (card) => openEditPage(card._hass, card),
   reload: (card) => reloadPage(card._integrationVersion),
   reveal: (card) => card._showNumbers(!card._numbersShown),
@@ -46,13 +46,22 @@ const ACTIONS = {
   },
   detail(card, { key }) {
     card._detail = key;
+    card._openPage();
+  },
+  schedule(card) {
+    card._schedule = true;
+    card._month = null;
+    card._openPage();
+  },
+  month(card, { key }) {
+    // tapping a month shows its debits, tapping it again the next days
+    card._month = card._month === Number(key) ? null : Number(key);
     card._render();
-    // the detail view always starts at its top (on phones the page may be scrolled down)
-    if (card.getBoundingClientRect().top < 0) card.scrollIntoView({ block: "start" });
   },
   back(card) {
     const category = card._detail;
     card._detail = null;
+    card._schedule = false;
     card._render();
     // back at the category the detail view was opened from
     const row = card._root.querySelector(`[data-action="detail"][data-key="${CSS.escape(category ?? "")}"]`);
@@ -73,6 +82,8 @@ class EssentialBudgetCard extends HTMLElement {
     this._config = {};
     this._open = new Set(); // expanded categories
     this._detail = null; // category shown in the detail view
+    this._schedule = false; // debits by month shown
+    this._month = null; // month chosen in the debits by month (0 = this month)
     this._shown = null; // numbers shown? null = as the card options say
     // privacy mode: hide the numbers again as soon as the app or browser tab goes to the background
     this._onVisibility = () => document.hidden && this._hideIfPrivate();
@@ -199,6 +210,12 @@ class EssentialBudgetCard extends HTMLElement {
 
   /* ---------------- Rendering ---------------- */
 
+  /** Shows a detail view; it always starts at its top (on phones the page may be scrolled down). */
+  _openPage() {
+    this._render();
+    if (this.getBoundingClientRect().top < 0) this.scrollIntoView({ block: "start" });
+  }
+
   _render() {
     if (!this._hass) return;
     const t = translator(this._hass);
@@ -217,8 +234,13 @@ class EssentialBudgetCard extends HTMLElement {
       isAdmin: !!this._hass.user?.is_admin,
       numbersShown: this._numbersShown,
       open: this._open,
+      month: this._month,
     };
     const model = buildModel(this._data);
+    const schedule = buildSchedule(this._data);
+    ctx.hasSchedule = schedule.any;
+    if (this._schedule && schedule.any) return renderSchedule(model, schedule, ctx);
+    this._schedule = false; // no debit dates (any more)
     const group = this._detail !== null && model.groups.find((g) => g.category === this._detail);
     if (!group) this._detail = null; // the category is gone
     return group ? renderDetail(model, group, ctx) : renderView(model, ctx);

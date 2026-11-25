@@ -122,12 +122,13 @@ export const VIEW_STYLE = `
   /* Detail view of a category: a list on narrow cards, a table on wide ones */
   .detail-head { display: flex; align-items: center; gap: 12px; }
   .table { padding-top: 4px; padding-bottom: 4px; }
-  .drow { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name month" "paid year" "person person";
+  .drow { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name month" "paid year" "person due";
     gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--eb-line); font-size: 14px; align-items: center; }
   .drow > span { min-width: 0; }
   .d-name { grid-area: name; }
   .d-person { grid-area: person; }
   .d-freq { grid-area: freq; display: none; }
+  .d-due { grid-area: due; text-align: right; font-size: 12px; color: var(--eb-muted); }
   .d-paid { grid-area: paid; font-size: 13px; color: var(--eb-muted); }
   .d-month { grid-area: month; text-align: right; }
   .d-year { grid-area: year; text-align: right; font-size: 12px; color: var(--eb-muted); }
@@ -136,14 +137,43 @@ export const VIEW_STYLE = `
   .dsum .d-year { font-weight: 400; }
   /* one person: no person column */
   .table.single .d-person { display: none; }
-  .table.single .drow { grid-template-areas: "name month" "paid year"; }
+  .table.single .drow { grid-template-areas: "name month" "paid year" "due due"; }
+  .table.single .d-due { text-align: left; }
+  .table.single .drow.no-due { grid-template-areas: "name month" "paid year"; }
+  .drow.no-due .d-due { display: none; }
   .table.single .dsum { grid-template-areas: "name month" ". year"; }
   .wide-only { display: none; }
   .chip { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
     background: color-mix(in srgb, var(--c) 16%, transparent); box-shadow: inset 0 0 0 1px var(--c); }
 
+  /* Debits by month: a bar per month (tap = its debits), dashed line = monthly average of the fixed costs */
+  .months { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; height: 180px; }
+  .mbar { min-width: 0; border: 0; background: transparent; padding: 4px 0; border-radius: 8px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .mbar:hover { background: var(--eb-tint); }
+  .mbar.selected { background: var(--eb-tint-strong); }
+  .mbar-value { display: none; font-size: 11px; color: var(--eb-muted); white-space: nowrap; }
+  .mbar-track { position: relative; flex: 1; width: 70%; max-width: 40px; display: flex; align-items: flex-end; }
+  .mbar-track i { display: block; width: 100%; min-height: 2px; border-radius: 4px 4px 0 0;
+    background: color-mix(in srgb, var(--primary-color) 45%, transparent); }
+  .mbar.now .mbar-track i, .mbar.selected .mbar-track i { background: var(--primary-color); }
+  .avg { position: absolute; left: -3px; right: -3px; border-top: 2px dashed var(--eb-muted); }
+  .mbar-label { font-size: 11px; color: var(--eb-muted); white-space: nowrap; }
+  .mbar.now .mbar-label { color: var(--primary-text-color); font-weight: 600; }
+  .legend { display: flex; align-items: center; gap: 8px; padding-top: 10px; font-size: 12px; color: var(--eb-muted); }
+  .avg-key { width: 18px; border-top: 2px dashed var(--eb-muted); }
+  .debit { display: grid; grid-template-columns: 88px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0;
+    border-top: 1px solid var(--eb-line); font-size: 14px; }
+  .debit-date { font-size: 13px; color: var(--eb-muted); }
+  .debit-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .debit-sub { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--eb-muted); }
+  .debit-sub .dot { width: 8px; height: 8px; }
+  .debit-value { text-align: right; font-variant-numeric: tabular-nums; }
+
   @container ${WIDE} {
     .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .months { height: 220px; }
+    .mbar-value { display: block; }
     .kpi.main { grid-column: auto; }
     .kpi .value { font-size: 28px; }
     .kpi.small .value { font-size: 24px; }
@@ -151,14 +181,15 @@ export const VIEW_STYLE = `
     .column.costs { order: 0; }
     .cat-share { width: 44px; font-size: 12px; }
     .cat-value { width: 76px; }
-    .drow, .dsum { grid-template-columns: minmax(0, 1fr) 140px 130px 120px 100px 100px; grid-template-areas: "name person freq paid month year"; }
+    .drow, .dsum { grid-template-columns: minmax(0, 1fr) 120px 120px 150px 110px 95px 95px; grid-template-areas: "name person freq due paid month year"; }
     .drow { padding: 10px 0; min-height: 28px; }
     .d-freq { display: block; font-size: 14px; color: var(--eb-muted); }
+    .d-due, .table.single .d-due { text-align: left; font-size: 14px; }
     .d-paid { text-align: right; font-size: 14px; }
     .d-year { font-size: 14px; }
     .dhead { display: grid; }
     .dhead > span { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--eb-muted); }
-    .table.single .drow, .table.single .dsum { grid-template-columns: minmax(0, 1fr) 130px 120px 100px 100px; grid-template-areas: "name freq paid month year"; }
+    .table.single .drow, .table.single .drow.no-due, .table.single .dsum { grid-template-columns: minmax(0, 1fr) 120px 150px 110px 95px 95px; grid-template-areas: "name freq due paid month year"; }
     .narrow-only { display: none; }
     .wide-only { display: inline; }
   }
@@ -170,6 +201,7 @@ export const EDIT_STYLE = `
     /* column widths of the rows on wide pages */
     --eb-col-amount: 140px;
     --eb-col-select: 160px;
+    --eb-col-due: 150px;
     --eb-col-remove: 40px;
   }
 
@@ -204,6 +236,11 @@ export const EDIT_STYLE = `
   .money .cur { padding: 0 10px 0 2px; font-size: 14px; color: var(--eb-muted); user-select: none; }
 
   /* Interval "N months": looks like the text of the frequency select, with an invisible select over the chevron as menu */
+  /* Debit date: day and (not monthly) month side by side; the label is only shown on narrow pages */
+  .due { display: flex; gap: 6px; }
+  .field .due .due-day { flex: 0 0 52px; width: 52px; text-align: center; }
+  .field .due select { flex: 1; }
+
   .field.f-freq .money input { flex: 0 0 auto; padding: 0 0 0 10px; box-sizing: content-box; text-align: left; }
   .f-freq .months { flex: 1; min-width: 0; padding-left: 4px; font-size: 14px; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; }
   .freq-menu { position: relative; display: flex; align-items: center; justify-content: center; width: 28px; height: 38px; margin-left: -6px;
@@ -223,6 +260,7 @@ export const EDIT_STYLE = `
   .erow > .f-to { grid-area: to; }
   .erow > .f-freq { grid-area: freq; }
   .erow > .f-person { grid-area: person; }
+  .erow > .f-due { grid-area: due; }
   .erow > .remove { grid-area: remove; width: 100%; height: 40px; }
   .ehead { display: none; }
 
@@ -231,8 +269,8 @@ export const EDIT_STYLE = `
   .erow.special { --cols: minmax(0, 1fr) minmax(0, 120px) 32px; --areas: "name gross remove"; }
   .erow.shared { --cols: calc(50% - 3px) minmax(0, 1fr) 40px; --areas: "name name remove" "amount to to"; }
   .erow.shared.single { --cols: minmax(0, 1fr) 110px 40px; --areas: "name amount remove"; }
-  .erow.costs { --cols: minmax(0, 1fr) minmax(0, 88px) minmax(0, 104px) 32px; --areas: "name amount freq remove" "person person person person"; padding: 14px 0; }
-  .erow.costs.single { --areas: "name amount freq remove"; }
+  .erow.costs { --cols: minmax(0, 1fr) minmax(0, 88px) minmax(0, 104px) 32px; --areas: "name amount freq remove" "due due person person"; padding: 14px 0; }
+  .erow.costs.single { --areas: "name amount freq remove" "due due . ."; }
   @container ${NARROW} {
     /* both amounts of an income need visible labels (wide pages have column headers) */
     .erow.income .f-gross .sr, .erow.income .f-amount .sr { position: static; width: auto; height: auto; clip: auto; overflow: visible; }
@@ -266,8 +304,9 @@ export const EDIT_STYLE = `
     .erow.special { --cols: minmax(0, 1fr) var(--eb-col-amount) var(--eb-col-remove); }
     .erow.shared { --cols: minmax(0, 1fr) var(--eb-col-select) var(--eb-col-amount) var(--eb-col-remove); --areas: "name to amount remove"; }
     .erow.shared.single { --cols: minmax(0, 1fr) var(--eb-col-amount) var(--eb-col-remove); --areas: "name amount remove"; }
-    .erow.costs { --cols: minmax(0, 1fr) var(--eb-col-amount) var(--eb-col-select) var(--eb-col-select) var(--eb-col-remove); --areas: "name amount freq person remove"; }
-    .erow.costs.single { --cols: minmax(0, 1fr) var(--eb-col-amount) var(--eb-col-select) var(--eb-col-remove); --areas: "name amount freq remove"; }
+    .erow.costs { --cols: minmax(0, 1fr) var(--eb-col-amount) var(--eb-col-select) var(--eb-col-due) var(--eb-col-select) var(--eb-col-remove); --areas: "name amount freq due person remove"; }
+    .erow.costs.single { --cols: minmax(0, 1fr) var(--eb-col-amount) var(--eb-col-select) var(--eb-col-due) var(--eb-col-remove); --areas: "name amount freq due remove"; }
+    .f-due .label { display: none; }
     .erow.ehead { display: grid; padding: 0 0 2px; border-top: 0; font-size: 12px; color: var(--eb-muted); }
     .erow.costs.ehead { padding: 14px 0 0; }
     .ehead + .erow { border-top: 0; }

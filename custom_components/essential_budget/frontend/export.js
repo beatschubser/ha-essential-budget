@@ -1,6 +1,10 @@
-/* Excel export: one sheet for the income, one for the fixed costs, with formulas for sums and derived values. */
+/*
+ * Excel export: one sheet for the income, one for the fixed costs, with formulas for sums and derived values,
+ * and one for the debits by month while fixed costs have debit dates.
+ */
 
-import { activePersons, categoryLabel, monthly, personLabel, sum } from "./model.js";
+import { dueText } from "./format.js";
+import { activePersons, buildSchedule, categoryLabel, monthly, personLabel, sum } from "./model.js";
 import { buildXlsx, colName } from "./xlsx.js";
 
 /*
@@ -27,8 +31,9 @@ const sheet = (name, columns, records, totalLabel) => {
   return { name, columns: columns.map(({ header, width, money }) => ({ header, width, money })), rows: [...rows, total] };
 };
 
-/** The sheets of the export for a saved budget (t = translator). */
-export const budgetSheets = (data, t) => {
+/** The sheets of the export for a saved budget (t = translator, fmt = formatter, today = start of the debits by month). */
+export const budgetSheets = (data, t, fmt, today = new Date()) => {
+  const schedule = buildSchedule(data, today);
   const person = (p) => personLabel(data.persons, p, t);
   const twoPersons = activePersons(data.persons).length > 1;
   const money = { width: 16, money: true, total: true };
@@ -69,6 +74,7 @@ export const budgetSheets = (data, t) => {
     ...(twoPersons ? [{ key: "person", header: t("person"), width: 16, value: (c) => person(c.person) }] : []),
     { key: "amount", header: t("per_payment"), width: 16, money: true, value: (c) => c.amount },
     { key: "interval", header: t("every_months"), width: 14, value: (c) => c.interval_months },
+    ...(schedule.any ? [{ key: "due", header: t("due"), width: 22, value: (c) => dueText(c, t, fmt) }] : []),
     {
       key: "month",
       header: t("per_month_title"),
@@ -79,13 +85,25 @@ export const budgetSheets = (data, t) => {
     { key: "year", header: t("per_year_title"), ...money, value: (c) => monthly(c) * 12, formula: (col, row) => `${col.month}${row}*12` },
   ];
 
-  return [sheet(t("income"), incomeColumns, income, t("sum")), sheet(t("fixed_costs"), costColumns, costs, t("sum"))];
+  // debits by month: what is really taken in each of the next 12 months, next to the monthly average
+  const costTotal = sum(data.fixed_costs.map(monthly));
+  const scheduleColumns = [
+    { key: "month", header: t("xl_month"), width: 20, value: (m) => fmt.monthYear(m.year, m.month) },
+    { key: "debits", header: t("schedule"), ...money, value: (m) => m.total },
+    { key: "average", header: t("average_month"), ...money, value: () => costTotal },
+  ];
+
+  return [
+    sheet(t("income"), incomeColumns, income, t("sum")),
+    sheet(t("fixed_costs"), costColumns, costs, t("sum")),
+    ...(schedule.any ? [sheet(t("xl_schedule"), scheduleColumns, schedule.months, t("sum"))] : []),
+  ];
 };
 
-/** Downloads the budget as "Budget 2026-11-09.xlsx"; currencySymbol is used for the number format. */
-export const downloadExcel = (data, t, currencySymbol) => {
+/** Downloads the budget as "Budget 2026-11-09.xlsx" (fmt = formatter, its currency sign is used for the number format). */
+export const downloadExcel = (data, t, fmt) => {
   const link = document.createElement("a");
-  link.href = URL.createObjectURL(buildXlsx(budgetSheets(data, t), currencySymbol));
+  link.href = URL.createObjectURL(buildXlsx(budgetSheets(data, t, fmt), fmt.symbol));
   link.download = `${t("xl_file")} ${new Date().toISOString().slice(0, 10)}.xlsx`;
   document.body.append(link);
   link.click();

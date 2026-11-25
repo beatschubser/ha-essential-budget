@@ -105,14 +105,15 @@ const INPUTS = {
     el.style.width = `${Math.max(1, el.value.length) + 0.4}ch`; // "N months" reads like the text of a select
     row.interval_months = el.value;
     ed._remark(el);
-    // on leaving the field: 1, 3 or 12 months go back to the select
-    if (done && INTERVALS.includes(Number(el.value))) {
-      Object.assign(row, { interval_months: String(Number(el.value)), _custom: false });
+    // on leaving the field: 1, 3 or 12 months go back to the select; the month of the debit appears or goes
+    if (done) {
+      if (INTERVALS.includes(Number(el.value))) Object.assign(row, { interval_months: String(Number(el.value)), _custom: false });
       ed._render();
     }
   },
   row(ed, el) {
     const { list, field } = el.dataset;
+    if (fieldType(list, field) === "day") el.value = el.value.replace(/\D/g, "");
     if (isAmount(fieldType(list, field)) && el.value.search(NOT_AMOUNT) >= 0) {
       // a pasted currency sign or spaces are removed right away, the caret stays where it was
       const caret = el.selectionStart ?? el.value.length;

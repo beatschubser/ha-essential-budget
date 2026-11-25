@@ -69,7 +69,10 @@ test("draft rows: texts for amounts, typed interval marked", () => {
 test("new rows", () => {
   assert.deepEqual(Object.keys(newRow("income")).sort(), ["_id", "amount", "gross", "name", "person"]);
   const cost = newRow("fixed_costs", { category: "Home" });
-  assert.deepEqual({ ...cost, _id: null }, { _id: null, name: "", category: "Home", person: "a", amount: "", interval_months: "1", _custom: false });
+  assert.deepEqual(
+    { ...cost, _id: null },
+    { _id: null, name: "", category: "Home", person: "a", amount: "", interval_months: "1", _custom: false, due_day: "", due_month: "" },
+  );
   assert.equal(newRow("income", { person: "b" }).person, "b");
 });
 
@@ -145,7 +148,24 @@ test("the lists have the same fields in the same order as in logic.py", () => {
   const python = readFileSync(new URL("../../custom_components/essential_budget/logic.py", import.meta.url), "utf8");
   const block = python.match(/^LISTS: .*? = \{\n([\s\S]*?)\n\}/m)[1];
   const lists = Object.fromEntries(
-    [...block.matchAll(/^\s+"(\w+)": \{(.*)\},$/gm)].map(([, list, fields]) => [list, [...fields.matchAll(/"(\w+)":/g)].map((m) => m[1])]),
+    // each list: '"income": {...},' on one line or over several lines
+    [...block.matchAll(/^ {4}"(\w+)": \{([\s\S]*?)\},$/gm)].map(([, list, fields]) => [list, [...fields.matchAll(/"(\w+)":/g)].map((m) => m[1])]),
   );
   assert.deepEqual(lists, Object.fromEntries(Object.entries(SCHEMA).map(([list, fields]) => [list, Object.keys(fields)])));
+});
+
+test("debit dates: day checked, month only kept for costs that are not paid monthly", () => {
+  const draft = draftOf(BUDGET);
+  const [fee, , rent] = [...draft.fixed_costs].sort((a, b) => a.name.localeCompare(b.name));
+  assert.equal(fee.due_month, "2");
+  rent.due_month = "5"; // monthly: no month
+  fee.due_day = ""; // no day: no month either
+  const { data, problems } = validateDraft(draft, LIMITS);
+  assert.deepEqual(problems, []);
+  const saved = Object.fromEntries(data.fixed_costs.map((c) => [c.name, c]));
+  assert.equal(saved.Rent.due_month, undefined);
+  assert.equal(saved["Broadcasting fee"].due_day, undefined);
+  assert.equal(saved["Broadcasting fee"].due_month, undefined);
+  for (const day of ["0", "32", "1.5"]) assert.equal(fieldValid("day", day, LIMITS), false, day);
+  for (const day of ["", "1", "31"]) assert.equal(fieldValid("day", day, LIMITS), true, day);
 });

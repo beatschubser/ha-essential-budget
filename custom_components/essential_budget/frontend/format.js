@@ -1,5 +1,6 @@
 /* Language, texts and number formats, all from the Home Assistant settings of the user. */
 
+import { MONTH_END, dueMonths } from "./model.js";
 import { TEXTS } from "./texts.js";
 
 const FALLBACK_LANGUAGE = "en";
@@ -61,7 +62,29 @@ export const formatter = (hass) => {
       /* currency unknown to the browser: the code is shown instead */
     }
     const plain = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
-    formatters.set(key, { locale, currency, money, symbol, amountText: (value) => plain.format(value) });
+    const monthShort = new Intl.DateTimeFormat(locale, { month: "short" });
+    const monthLong = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" });
+    const day = new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short" });
+    formatters.set(key, {
+      locale,
+      currency,
+      money,
+      symbol,
+      amountText: (value) => plain.format(value),
+      // dates: month(2) = "Feb", monthYear(2027, 1) = "January 2027", date(d) = "Mon, Feb 1"
+      month: (month) => monthShort.format(new Date(2000, month - 1, 1)),
+      monthYear: (year, month) => monthLong.format(new Date(year, month - 1, 1)),
+      date: (date) => day.format(date),
+    });
   }
   return formatters.get(key);
+};
+
+/** The debit date of a fixed cost as text: "15." (monthly), "15. Feb, May" or "" without (complete) date. */
+export const dueText = (cost, t, fmt) => {
+  const months = dueMonths(cost);
+  if (!months) return "";
+  const day = cost.due_day === MONTH_END ? t("month_end") : t("due_day_n", { d: cost.due_day });
+  if (months.length === 12) return day;
+  return t("due_in", { day, months: months.map((month) => fmt.month(month)).join(", ") });
 };

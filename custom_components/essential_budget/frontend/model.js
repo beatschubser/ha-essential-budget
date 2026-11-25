@@ -79,3 +79,64 @@ export const buildModel = (data) => {
     empty: !data.income.length && !data.special_payments.length && !data.shared_income.length && !data.fixed_costs.length,
   };
 };
+
+/* ---------- Debits: when the fixed costs are taken from the accounts ---------- */
+
+export const MONTH_END = 31; // due_day 31 = the last day of every month
+
+const monthIndex = (year, month) => year * 12 + month - 1;
+
+/**
+ * Is a fixed cost debited in this month (1 = January)? Monthly costs need a day, the others also the month
+ * of a debit; further debits follow the interval, counted within each year from that month
+ * (exact for intervals that fit into a year: 1, 2, 3, 4, 6 and 12 months).
+ */
+export const isDueIn = (cost, year, month) => {
+  if (!cost.due_day) return false;
+  const n = cost.interval_months;
+  if (n === 1) return true;
+  if (!cost.due_month) return false;
+  const diff = monthIndex(year, month) - monthIndex(year, cost.due_month);
+  return ((diff % n) + n) % n === 0;
+};
+
+/** Months (1..12) with a debit, or null while the fixed cost has no (complete) debit date. */
+export const dueMonths = (cost) => {
+  if (!cost.due_day || (cost.interval_months !== 1 && !cost.due_month)) return null;
+  return [...Array(12)].map((_, i) => i + 1).filter((month) => isDueIn(cost, 2000, month));
+};
+
+/** The day of the debit in a month (31 and days a month does not have = its last day). */
+const dueDate = (cost, year, month) => new Date(year, month - 1, Math.min(cost.due_day, new Date(year, month, 0).getDate()));
+
+/**
+ * Debits of the next 12 months, starting with the month of today:
+ * { months: [{ year, month, total, items: [{ cost, date }] }], upcoming: [{ cost, date }] (the next `days` days),
+ *   missing: fixed costs without debit date, any: at least one fixed cost has a date }.
+ */
+export const buildSchedule = (data, today = new Date(), days = 30) => {
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + days);
+  const dated = data.fixed_costs.filter((cost) => dueMonths(cost));
+  const debitsIn = (year, month) =>
+    dated
+      .filter((cost) => isDueIn(cost, year, month))
+      .map((cost) => ({ cost, date: dueDate(cost, year, month) }))
+      .sort((a, b) => a.date - b.date || b.cost.amount - a.cost.amount);
+  const months = [...Array(13)].map((_, i) => {
+    const first = new Date(start.getFullYear(), start.getMonth() + i, 1);
+    const year = first.getFullYear();
+    const month = first.getMonth() + 1;
+    const items = debitsIn(year, month);
+    return { year, month, items, total: sum(items.map((d) => d.cost.amount)) };
+  });
+  // the 13th month only completes the upcoming days at the end of a month
+  const upcoming = months.flatMap((m) => m.items).filter((d) => d.date >= start && d.date < end);
+  return {
+    days,
+    months: months.slice(0, 12),
+    upcoming,
+    missing: data.fixed_costs.filter((cost) => !dueMonths(cost)),
+    any: dated.length > 0,
+  };
+};

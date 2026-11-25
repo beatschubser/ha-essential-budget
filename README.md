@@ -12,14 +12,14 @@ A static household budget for Home Assistant, for one or two persons: monthly ne
 - **Special payments:** once a year (bonus, Christmas bonus) with their gross; they count for the annual gross, not for the monthly income
 - **Fixed costs:** free categories, paid by one of the persons, paid monthly, quarterly, yearly or every N months. All costs are converted to a monthly value (a yearly payment counts with one twelfth)
 - **Categories** sorted by size with share and bar; expand a category to see its items, or open it for all details (amount per payment, per month, per year)
-- **Free budget per person** (with two persons): own income + joint income received by the person − fixed costs paid by the person; negative values are shown in red
+- **Free budget per person** (with two persons, below the free budget): own income + joint income received by the person − fixed costs paid by the person; negative values are shown in red
 - **Annual gross** in its own box, per person: 12 × the monthly gross of the income + the gross of the special payments
 - **Own edit page:** income and fixed costs are edited on their own page, the card on the dashboard only shows the budget (administrators only, no sidebar entry)
 - **Debit dates (optional):** give a fixed cost the day it is debited (and, if it is not paid monthly, a month with a debit; the others follow the interval). The calendar icon at the top of the card then shows the debits of the next 12 months as bars, and the debits of the next 30 days or of a chosen month. Below the fixed costs a box shows the debits of the next days (7 by default, set in the card options) Intervals that do not fit into a year (e.g. every 5 months) are counted from the chosen month in every year
 - **Excel export:** the Excel icon at the top right of the card downloads the income and the fixed costs as an Excel file (with sums and formulas; with debit dates also the debits by month); the gear next to it opens the edit page (administrators only)
 - **Show/hide numbers:** the eye icon at the top of the card blurs all numbers until it is tapped again or the page is reloaded
 - **Privacy mode** (optional): the numbers start hidden; after tapping the eye icon they are hidden again after a set time (default 30 seconds), when the app or browser tab goes to the background and when you tap again
-- Desktop layout on wide cards (income, annual gross and free budget per person on the left, fixed costs on the right), one column on phones; follows the colors of your theme
+- Desktop layout on wide cards (income and annual gross on the left, fixed costs and the next debits on the right), one column on phones; follows the colors of your theme
 - English and German; amounts stored with cents and shown in whole units of the currency set in Home Assistant (Settings > System > General)
 
 ## Installation

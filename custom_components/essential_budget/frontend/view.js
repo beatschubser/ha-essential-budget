@@ -44,11 +44,21 @@ const renderKeyFigures = (m, ctx) => {
   const { t } = ctx;
   const share = esc(t("of_income", { p: "\u0000" })).replace("\u0000", percent(m.costTotal, m.incomeTotal));
   const figure = (cls, label, value, sub) =>
-    `<div class="box kpi ${cls}"><span class="label">${esc(label)}</span><span class="value">${money(ctx, value)}</span><span class="sub">${sub}</span></div>`;
+    `<div class="box kpi ${cls}"><span class="label">${esc(label)}</span><span class="value">${money(ctx, value)}</span>${sub}</div>`;
+  // the free budget shows what is left per person (with two persons)
+  const perPerson = m.single
+    ? ""
+    : `<span class="kpi-people">${m.people
+        .map(
+          (p) =>
+            `<span class="kpi-person"><span class="dot" style="background:${p.color}"></span><span class="ellipsis">${esc(p.name)}</span><span class="strong ${p.budget < 0 ? "negative" : ""}">${money(ctx, p.budget)}</span></span>`,
+        )
+        .join("")}</span>`;
+  const sub = (text) => `<span class="sub">${text}</span>`;
   return `<div class="kpis">
-    ${figure("", t("monthly_net"), m.incomeTotal, esc(t("all_income")))}
-    ${figure("", t("fixed_costs"), m.costTotal, share)}
-    ${figure(`main ${m.budget < 0 ? "negative" : "positive"}`, t("free_budget"), m.budget, esc(t("after_costs")))}
+    ${figure("", t("monthly_net"), m.incomeTotal, sub(esc(t("all_income"))))}
+    ${figure("", t("fixed_costs"), m.costTotal, sub(share))}
+    ${figure(`main ${m.budget < 0 ? "negative" : "positive"}`, t("free_budget"), m.budget, perPerson)}
   </div>`;
 };
 
@@ -76,18 +86,6 @@ const renderAnnualGross = (m, ctx) => {
       .join("");
   return `<div class="box">${sectionHead("mdi:calendar-range", ctx.t("annual_gross"), money(ctx, m.grossTotal))}
     <div class="blocks">${people.map((p) => block(ctx, p.name, p.color, p.gross, lines(p))).join("")}</div></div>`;
-};
-
-/** With one person the budget per person equals the budget: no extra box. */
-const renderBudgetPerPerson = (m, ctx) => {
-  if (m.single) return "";
-  const rows = m.people
-    .map(
-      (p) =>
-        `<div class="row"><span class="strong" style="color:${p.color}">${esc(p.name)}</span><span class="strong ${p.budget < 0 ? "negative" : ""}">${money(ctx, p.budget)}</span></div>`,
-    )
-    .join("");
-  return `<div class="box">${sectionHead("mdi:wallet-outline", ctx.t("free_budget_per_person"))}${rows}</div>`;
 };
 
 const renderCategory = (g, m, maxGroup, ctx) => {
@@ -132,10 +130,10 @@ const renderFixedCosts = (m, ctx) => {
     ${m.groups.map((g) => renderCategory(g, m, maxGroup, ctx)).join("")}</div>`;
 };
 
-/** The overview. Wide: income, annual gross and budget per person at the left, fixed costs at the right. */
+/** The overview. Wide: income and annual gross at the left, fixed costs and the next debits at the right. */
 export const renderView = (m, ctx) => {
   if (m.empty) return renderEmpty(ctx);
-  const left = renderMonthlyNet(m, ctx) + renderAnnualGross(m, ctx) + renderBudgetPerPerson(m, ctx);
+  const left = renderMonthlyNet(m, ctx) + renderAnnualGross(m, ctx);
   const right = renderFixedCosts(m, ctx) + renderUpcoming(m, ctx);
   return `${renderHeader(ctx)}${renderKeyFigures(m, ctx)}<div class="columns"><div class="column">${left}</div><div class="column costs">${right}</div></div>`;
 };

@@ -87,6 +87,11 @@ export const VIEW_STYLE = `
   .kpi.main { grid-column: 1 / -1; box-shadow: inset 0 0 0 2px var(--eb-success); }
   .kpi.main.negative { box-shadow: inset 0 0 0 2px var(--eb-error); }
   .kpis.detail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* free budget per person inside the key figure */
+  .kpi-people { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 2px; font-size: 13px; color: var(--eb-muted); }
+  .kpi-person { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+  .kpi-person .strong { color: var(--primary-text-color); }
+  .kpi-person .negative { color: var(--eb-error); }
 
   /* Narrow: one column with the fixed costs first; wide: income at the left, fixed costs at the right */
   .columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--eb-gap); align-items: start; }

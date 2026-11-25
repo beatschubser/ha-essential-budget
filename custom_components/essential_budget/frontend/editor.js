@@ -123,6 +123,8 @@ const INPUTS = {
     }
     ed._row(el)[field] = el.value;
     ed._remark(el);
+    // without a day the month of a debit is not needed any more
+    if (field === "due_day" && !el.value) el.closest(".erow")?.querySelector('[data-field="due_month"]')?.classList.remove("invalid");
   },
 };
 
@@ -192,7 +194,7 @@ class EssentialBudgetEditor extends HTMLElement {
   async _save() {
     const { data, problems, secondPersonInUse } = validateDraft(this._draft, this._info.limits);
     if (secondPersonInUse) return this._showProblem({ tab: "b" }, this._t("second_person_in_use"));
-    if (problems.length) return this._showProblem(problemPlace(this._draft, problems[0]), this._t("invalid"));
+    if (problems.length) return this._showProblem(problemPlace(this._draft, problems[0]), this._t("invalid"), problems);
     this._state.saving = true;
     this._render();
     try {
@@ -212,10 +214,12 @@ class EssentialBudgetEditor extends HTMLElement {
   }
 
   /** Opens the tab (and category) of a problem, shows the message and marks the fields there. */
-  _showProblem({ tab, category }, message) {
+  _showProblem({ tab, category }, message, problems = []) {
     Object.assign(this._state, { tab, saveError: message, ...(category === undefined ? {} : { category }) });
     this._render();
     this._root.querySelectorAll('[data-bind="row"], [data-bind="interval"]').forEach((el) => this._mark(el));
+    // fields that are only wrong together with others (a debit day without month)
+    for (const { id, field } of problems) this._root.querySelector(`[data-id="${id}"][data-field="${field}"]`)?.classList.add("invalid");
   }
 
   /** Draws the page; focus = selector of the field to continue in (select = with its text selected). */

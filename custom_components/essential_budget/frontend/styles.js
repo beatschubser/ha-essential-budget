@@ -221,7 +221,7 @@ export const EDIT_STYLE = `
   .field input, .field select { font: inherit; font-size: 14px; color: var(--primary-text-color); height: 40px; box-sizing: border-box; min-width: 0;
     padding: 0 10px; border-radius: 8px; border: 1px solid var(--eb-line); background: var(--eb-surface); }
   .field input:focus, .field select:focus { outline: 2px solid var(--primary-color); outline-offset: -1px; }
-  .field input.invalid { background: color-mix(in srgb, var(--eb-error) 18%, transparent); border-color: var(--eb-error); }
+  .field input.invalid, .field select.invalid { background: color-mix(in srgb, var(--eb-error) 18%, transparent); border-color: var(--eb-error); }
   .field.f-color input { width: 48px; padding: 4px; cursor: pointer; }
   .name-row { display: flex; align-items: center; gap: 8px; }
   .small-btn { width: 36px; height: 36px; }

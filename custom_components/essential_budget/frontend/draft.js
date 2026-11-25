@@ -127,6 +127,8 @@ export const validateDraft = (draft, limits) => {
       const item = {};
       for (const [field, type] of Object.entries(SCHEMA[list])) {
         if (!fieldValid(type, row[field], limits)) problems.push({ list, id: row._id, field });
+        // a debit day of a fixed cost that is not paid monthly needs the month of a debit
+        if (type === "month" && !isEmpty(row.due_day) && !isMonthlyRow(row) && isEmpty(row[field])) problems.push({ list, id: row._id, field });
         const value = toValue(type, row[field]);
         if (value !== undefined) item[field] = value;
       }

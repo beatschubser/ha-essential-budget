@@ -169,3 +169,15 @@ test("debit dates: day checked, month only kept for costs that are not paid mont
   for (const day of ["0", "32", "1.5"]) assert.equal(fieldValid("day", day, LIMITS), false, day);
   for (const day of ["", "1", "31"]) assert.equal(fieldValid("day", day, LIMITS), true, day);
 });
+
+test("a debit day without month is a problem for costs that are not paid monthly", () => {
+  const draft = draftOf(BUDGET);
+  const liability = draft.fixed_costs.find((row) => row.name === "Liability");
+  liability.due_month = "";
+  assert.deepEqual(validateDraft(draft, LIMITS).problems, [{ list: "fixed_costs", id: liability._id, field: "due_month" }]);
+  liability.interval_months = "1"; // monthly: no month needed
+  assert.deepEqual(validateDraft(draft, LIMITS).problems, []);
+  liability.interval_months = "12";
+  liability.due_day = ""; // no day: no month needed
+  assert.deepEqual(validateDraft(draft, LIMITS).problems, []);
+});

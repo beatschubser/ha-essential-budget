@@ -22,7 +22,7 @@ import {
   renameCategory,
   validateDraft,
 } from "./draft.js";
-import { renderEditCategory, renderEditOverview } from "./edit-view.js";
+import { dayWidth, renderEditCategory, renderEditOverview } from "./edit-view.js";
 import { formatter, translator } from "./format.js";
 import { errorText } from "./html.js";
 import { buildModel } from "./model.js";
@@ -88,7 +88,7 @@ export const EDIT_ACTIONS = {
     card._detail = category;
     keepDraft(card._data, card._draft);
     card._openPage();
-    card._focus(".title-input", true);
+    card._focus('[data-bind="category-name"]', true);
   },
   deletecategory: (card, { key }) => ask(card, "category", key),
   "confirm-no"(card) {
@@ -153,7 +153,10 @@ export const EDIT_INPUTS = {
   },
   row(card, el, done) {
     const { list, field } = el.dataset;
-    if (fieldType(list, field) === "day") el.value = el.value.replace(/\D/g, "");
+    if (fieldType(list, field) === "day") {
+      el.value = el.value.replace(/\D/g, "");
+      el.style.width = dayWidth(el.value);
+    }
     if (isAmount(fieldType(list, field)) && el.value.search(NOT_AMOUNT) >= 0) {
       // a pasted currency sign or spaces are removed right away, the caret stays where it was
       const caret = el.selectionStart ?? el.value.length;

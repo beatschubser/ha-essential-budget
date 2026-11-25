@@ -1,12 +1,9 @@
 /*
  * Styles of the card. Colors come from the Home Assistant theme.
- * Layout: one column on narrow cards, the wide layout from 700 px (container query on .root);
- * the rows of fields while editing follow the width of their box (container query on .box.editing).
+ * Layout: one column on narrow cards, the wide layout from 700 px (container query on .root).
  */
 
 const WIDE = "(min-width: 700px)";
-const EDIT_WIDE = "ebox (min-width: 440px)"; // a box while editing: wide enough for a row of fields in one line
-const EDIT_NARROW = "ebox (max-width: 439.98px)";
 
 /* Base of the card */
 export const BASE_STYLE = `
@@ -199,22 +196,81 @@ export const VIEW_STYLE = `
   }
 `;
 
-/* Editing in the card: rows of fields, categories, questions and the footer */
+/* Editing in the card: looks like the view, the values are fields with a light background */
 export const EDIT_STYLE = `
-  :host {
-    /* column widths of the rows in wide boxes */
-    --eb-col-amount: 120px;
-    --eb-col-select: 160px;
-    --eb-col-due: 150px;
-    --eb-col-remove: 40px;
-  }
-
-  /* Boxes while editing: their own width decides the layout of their rows */
-  .box.editing { container: ebox / inline-size; }
   .live { display: contents; }
-  .editing .block { gap: 4px; }
-  .person-head { display: flex; align-items: center; gap: 6px; }
-  .person-head .field input[type="text"] { font-weight: 600; font-size: 15px; }
+
+  /* Fields: the text of the view with a dotted line below; a light background on hover, the theme color on focus */
+  /* the text of a field starts where the text of the view starts (padding and negative margin) */
+  .in { font: inherit; color: inherit; height: 30px; box-sizing: border-box; min-width: 0; margin: 0 -5px; padding: 0 4px;
+    border: 1px solid transparent; border-radius: 6px; background: transparent;
+    background-image: linear-gradient(to right, var(--eb-muted) 1px, transparent 1px); background-size: 4px 1px;
+    background-repeat: repeat-x; background-position: 5px calc(100% - 3px); background-origin: border-box; }
+  .in:hover { background-color: var(--eb-tint-strong); }
+  .in:focus, .in:focus-within { outline: 2px solid var(--primary-color); outline-offset: -1px; background: var(--eb-surface); }
+  select.in:not(.chip) { appearance: none; padding-right: 6px; }
+  .in input { font: inherit; color: inherit; border: 0; background: transparent; padding: 0; margin: 0; min-width: 0; height: 100%; }
+  .in input:focus { outline: none; }
+  .in.invalid, .in:has(.invalid), .in .invalid { background: color-mix(in srgb, var(--eb-error) 18%, transparent); }
+  .in.invalid, .in:has(.invalid) { border-color: var(--eb-error); }
+  .in::placeholder, .in input::placeholder { color: var(--eb-muted); opacity: 0.7; }
+  select.in { cursor: pointer; }
+
+  /* Amounts: right-aligned with the currency sign like in the view */
+  .money { display: inline-flex; align-items: center; justify-content: flex-end; }
+  .money input { flex: 1; width: 100%; text-align: right; font-variant-numeric: tabular-nums; }
+  .money .cur { padding-left: 3px; user-select: none; }
+  .money.day, .drow .in.money.day { width: auto; flex: 0 0 auto; justify-content: flex-start; }
+  .money.day input { flex: 0 0 auto; text-align: left; }
+  .money.day .cur { padding-left: 1px; }
+
+  /* Interval "N months": looks like the text of the select, with an invisible select over the chevron as menu */
+  .money.interval { justify-content: flex-start; }
+  .money.interval input { flex: 0 0 auto; text-align: left; }
+  .unit-months { flex: 1; min-width: 0; padding-left: 4px; white-space: nowrap; overflow: hidden; }
+  .freq-menu { position: relative; display: flex; align-items: center; justify-content: center; width: 22px; height: 100%; flex-shrink: 0; color: var(--eb-muted); }
+  .freq-menu ha-icon { --mdc-icon-size: 18px; }
+  .freq-menu select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
+  /* Person: like the chip of the view */
+  select.in.chip { margin: 0; height: 24px; padding: 0 4px 0 8px; border-radius: 12px; font-size: 12px; font-weight: 600; color: var(--primary-text-color);
+    background: color-mix(in srgb, var(--c) 16%, transparent); box-shadow: inset 0 0 0 1px var(--c); border: 0; background-image: none; }
+
+  .tiny { width: 28px; height: 28px; }
+  .tiny ha-icon { --mdc-icon-size: 18px; }
+
+  /* Blocks: the name of a person in the head, lines with name, amount and remove */
+  .block-head .in { width: calc(100% + 10px); }
+  .color-dot { position: relative; width: 12px; height: 12px; cursor: pointer; }
+  .color-dot input { position: absolute; inset: -6px; width: 24px; height: 24px; opacity: 0; cursor: pointer; padding: 0; border: 0; }
+  .line.eline { align-items: center; gap: 6px; min-height: 32px; }
+  .eline > input.in { flex: 1; }
+  .eline > .money { flex: 0 0 96px; width: 96px; }
+  .eline > .tiny { margin-right: -6px; }
+  .eline .calc { flex: 0 0 auto; text-align: right; }
+  .eline > .money.gross { flex: 0 0 84px; width: 84px; margin: 0 -2px; }
+  .eline select.in.chip { flex-shrink: 0; max-width: 110px; }
+
+  /* "+ Add …": small, below the lines */
+  .editing .add, .table.edit .add { min-height: 32px; margin-top: 2px; padding: 0 10px 0 6px; border: 0; font-size: 13px; }
+  .editing .add ha-icon, .table.edit .add ha-icon { --mdc-icon-size: 16px; }
+  .cat-row .icon-btn:last-child { margin-left: 4px; }
+
+  /* Detail view of a category: the table of the view with fields and a column for remove */
+  .in.title { width: calc(100% + 10px); height: 40px; font-size: 20px; font-weight: 600; }
+  .table.edit .drow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 28px; align-items: center;
+    grid-template-areas: "name name remove" "paid freq ." "due person ."; }
+  .table.edit.single .drow { grid-template-areas: "name name remove" "paid freq ." "due due ."; }
+  .table.edit .d-freq { display: block; }
+  .table.edit .drow { gap: 4px 8px; }
+  .table.edit .drow:not(.dsum) .d-month, .table.edit .drow:not(.dsum) .d-year { display: none; }
+  .table.edit .dsum { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name month" ". year"; }
+  .table.edit .dsum .d-month, .table.edit .dsum .d-year { display: block; }
+  .d-remove { grid-area: remove; display: flex; justify-content: flex-end; }
+  .drow .in:not(.chip) { width: calc(100% + 10px); }
+  .d-due { text-align: left; }
+  .due { display: flex; gap: 6px; }
+  .due select.in { flex: 1; width: auto; margin-left: 0; }
 
   /* A question before deleting */
   .confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; padding: 10px 12px; border-radius: 10px;
@@ -222,81 +278,11 @@ export const EDIT_STYLE = `
   .confirm .grow { flex-basis: 200px; }
   .btn.danger { background: var(--eb-error); border-color: var(--eb-error); color: #fff; }
 
-  /* Categories while editing: name, sum, edit entries, delete */
-  .ecat { display: flex; align-items: center; gap: 4px; min-height: 52px; border-top: 1px solid var(--eb-line); }
-  .ecat .cat-btn { padding: 0 4px 0 8px; font-size: 14px; }
-  .ecat .cat-value { width: auto; min-width: 48px; }
-  .ecat .icon-btn { width: 40px; height: 40px; }
-  .title-input { font-size: 18px !important; font-weight: 600; }
-
   /* Unsaved changes from before */
   .kept { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px;
     background: color-mix(in srgb, var(--primary-color) 10%, var(--eb-surface)); }
   .kept ha-icon { color: var(--primary-color); }
   .kept .grow { flex-basis: 200px; }
-
-  /* Fields */
-  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; color: var(--eb-muted); }
-  .field input, .field select { font: inherit; font-size: 14px; color: var(--primary-text-color); height: 40px; box-sizing: border-box; min-width: 0;
-    padding: 0 10px; border-radius: 8px; border: 1px solid var(--eb-line); background: var(--eb-surface); }
-  .field input:focus, .field select:focus { outline: 2px solid var(--primary-color); outline-offset: -1px; }
-  .field input.invalid, .field select.invalid { background: color-mix(in srgb, var(--eb-error) 18%, transparent); border-color: var(--eb-error); }
-  .field.f-color input { width: 48px; padding: 4px; cursor: pointer; }
-  .small-btn { width: 36px; height: 36px; }
-  .small-btn ha-icon { --mdc-icon-size: 18px; }
-
-  /* Amounts: the field and the currency sign share one frame */
-  .money { display: flex; align-items: center; height: 40px; box-sizing: border-box; border-radius: 8px;
-    border: 1px solid var(--eb-line); background: var(--eb-surface); }
-  .money:focus-within { outline: 2px solid var(--primary-color); outline-offset: -1px; }
-  .money:has(input.invalid) { background: color-mix(in srgb, var(--eb-error) 18%, transparent); border-color: var(--eb-error); }
-  .field .money input { flex: 1; width: 100%; height: 38px; border: 0; background: transparent; padding-right: 4px;
-    text-align: right; font-variant-numeric: tabular-nums; }
-  .field .money input:focus { outline: none; }
-  .money .cur { padding: 0 10px 0 2px; font-size: 14px; color: var(--eb-muted); user-select: none; }
-
-  /* Interval "N months": looks like the text of the frequency select, with an invisible select over the chevron as menu */
-  /* Debit date: day and (not monthly) month side by side; the label is only shown on narrow boxes */
-  .due { display: flex; gap: 6px; }
-  .due-day-frame { flex: 0 0 56px; width: 56px; }
-  .field .due .money .due-day { padding: 0 0 0 6px; text-align: right; }
-  .due-day-frame .cur { padding: 0 12px 0 1px; color: var(--primary-text-color); }
-  .field .due select { flex: 1; }
-
-  .field.f-freq .money input { flex: 0 0 auto; padding: 0 0 0 10px; box-sizing: content-box; text-align: left; }
-  .f-freq .unit-months { flex: 1; min-width: 0; padding-left: 4px; font-size: 14px; color: var(--primary-text-color); white-space: nowrap; overflow: hidden; }
-  .freq-menu { position: relative; display: flex; align-items: center; justify-content: center; width: 28px; height: 38px; margin-left: -6px;
-    color: var(--eb-muted); flex-shrink: 0; }
-  .freq-menu ha-icon { --mdc-icon-size: 20px; }
-  .field .freq-menu select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; padding: 0; border: 0; }
-
-  /*
-   * Rows: a grid per list. Each list only sets its columns (--cols) and the places of its fields (--areas);
-   * the fields find their place by their name.
-   */
-  .erow { display: grid; grid-template-columns: var(--cols); grid-template-areas: var(--areas); gap: 8px 6px; align-items: end;
-    padding: 8px 0; border-top: 1px solid var(--eb-line); }
-  .erow > .f-name { grid-area: name; }
-  .erow > .f-gross { grid-area: gross; }
-  .erow > .f-amount { grid-area: amount; }
-  .erow > .f-to { grid-area: to; }
-  .erow > .f-freq { grid-area: freq; }
-  .erow > .f-person { grid-area: person; }
-  .erow > .f-due { grid-area: due; }
-  .erow > .remove { grid-area: remove; width: 100%; height: 40px; }
-  .ehead { display: none; }
-
-  /* narrow boxes: everything in one line where it fits */
-  .erow.income { --cols: minmax(0, 1fr) minmax(0, 1fr) 32px; --areas: "name name remove" "gross amount ."; }
-  .erow.special { --cols: minmax(0, 1fr) minmax(0, 120px) 32px; --areas: "name gross remove"; }
-  .erow.shared { --cols: calc(50% - 3px) minmax(0, 1fr) 40px; --areas: "name name remove" "amount to to"; }
-  .erow.shared.single { --cols: minmax(0, 1fr) 110px 40px; --areas: "name amount remove"; }
-  .erow.costs { --cols: minmax(0, 1fr) minmax(0, 88px) minmax(0, 104px) 32px; --areas: "name amount freq remove" "due due person person"; padding: 14px 0; }
-  .erow.costs.single { --areas: "name amount freq remove" "due due . ."; }
-  @container ${EDIT_NARROW} {
-    /* both amounts of an income need visible labels (wide boxes have column headers) */
-    .erow.income .f-gross .sr, .erow.income .f-amount .sr { position: static; width: auto; height: auto; clip: auto; overflow: visible; }
-  }
 
   /* Footer: stays at the bottom of the window */
   .footer { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px; position: sticky; bottom: 8px; z-index: 1; }
@@ -306,22 +292,15 @@ export const EDIT_STYLE = `
   .btn[disabled] { opacity: 0.6; cursor: default; }
   /* both buttons in one line where they fit, else one below the other in full width */
   .footer .btn { flex: 1 1 140px; }
+
   @container card ${WIDE} {
     .footer .btn { flex: 0 0 auto; }
     .footer .btn:first-of-type { margin-left: auto; }
-  }
-
-  @container ${EDIT_WIDE} {
-    /* wide boxes: one line per row with column headers */
-    .erow.income { --cols: minmax(0, 1fr) var(--eb-col-amount) var(--eb-col-amount) var(--eb-col-remove); --areas: "name gross amount remove"; }
-    .erow.special { --cols: minmax(0, 1fr) var(--eb-col-amount) var(--eb-col-remove); }
-    .erow.shared { --cols: minmax(0, 1fr) minmax(0, 120px) var(--eb-col-amount) var(--eb-col-remove); --areas: "name to amount remove"; }
-    .erow.shared.single { --cols: minmax(0, 1fr) var(--eb-col-amount) var(--eb-col-remove); --areas: "name amount remove"; }
-    .erow.costs { --cols: minmax(0, 1fr) var(--eb-col-amount) var(--eb-col-select) var(--eb-col-due) var(--eb-col-select) var(--eb-col-remove); --areas: "name amount freq due person remove"; }
-    .erow.costs.single { --cols: minmax(0, 1fr) var(--eb-col-amount) var(--eb-col-select) var(--eb-col-due) var(--eb-col-remove); --areas: "name amount freq due remove"; }
-    .f-due .label { display: none; }
-    .erow.ehead { display: grid; padding: 0 0 2px; border-top: 0; font-size: 12px; color: var(--eb-muted); }
-    .erow.costs.ehead { padding: 14px 0 0; }
-    .ehead + .erow { border-top: 0; }
+    .table.edit .drow, .table.edit .dhead { grid-template-columns: minmax(0, 1fr) 100px 140px 160px 100px 80px 80px 28px;
+      grid-template-areas: "name person freq due paid month year remove"; }
+    .table.edit.single .drow, .table.edit.single .dhead { grid-template-columns: minmax(0, 1fr) 140px 160px 100px 80px 80px 28px;
+      grid-template-areas: "name freq due paid month year remove"; }
+    .table.edit .drow:not(.dsum) .d-month, .table.edit .drow:not(.dsum) .d-year { display: block; }
+    .table.edit .dsum { grid-template-columns: minmax(0, 1fr) 80px 80px 28px; grid-template-areas: "name month year ."; }
   }
 `;

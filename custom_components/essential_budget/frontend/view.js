@@ -95,7 +95,8 @@ const renderAnnualGross = (m, ctx) => {
     <div class="blocks">${people.map((p) => block(ctx, p.name, p.color, p.gross, lines(p))).join("")}</div></div>`;
 };
 
-const renderCategory = (g, m, maxGroup, ctx) => {
+/** A category row: expand button, name with bar, share and sum (tap = detail view); after = HTML after the row (edit mode: delete). */
+export const renderCategory = (g, m, maxGroup, ctx, after = "") => {
   const { t, open } = ctx;
   const name = categoryLabel(g.category, t);
   const expandable = g.items.length > 1; // a single item needs no expanding
@@ -127,7 +128,7 @@ const renderCategory = (g, m, maxGroup, ctx) => {
         <span class="cat-share">${percent(g.sum, m.costTotal)}</span>
         <span class="cat-value">${money(ctx, g.sum)}</span>
         <ha-icon class="muted" icon="mdi:chevron-right"></ha-icon>
-      </button>
+      </button>${after}
     </div>${items}</div>`;
 };
 

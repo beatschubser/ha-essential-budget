@@ -146,22 +146,19 @@ export const VIEW_STYLE = `
   .chip { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
     background: color-mix(in srgb, var(--c) 16%, transparent); box-shadow: inset 0 0 0 1px var(--c); }
 
-  /* Debits by month: a bar per month (tap = its debits), dashed line = monthly average of the fixed costs */
+  /* Debits by month: a bar per month (tap = its debits) */
   .months { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; height: 180px; }
   .mbar { min-width: 0; border: 0; background: transparent; padding: 4px 0; border-radius: 8px; cursor: pointer;
     display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .mbar:hover { background: var(--eb-tint); }
   .mbar.selected { background: var(--eb-tint-strong); }
   .mbar-value { display: none; font-size: 11px; color: var(--eb-muted); white-space: nowrap; }
-  .mbar-track { position: relative; flex: 1; width: 70%; max-width: 40px; display: flex; align-items: flex-end; }
+  .mbar-track { flex: 1; width: 70%; max-width: 40px; display: flex; align-items: flex-end; }
   .mbar-track i { display: block; width: 100%; min-height: 2px; border-radius: 4px 4px 0 0;
     background: color-mix(in srgb, var(--primary-color) 45%, transparent); }
   .mbar.now .mbar-track i, .mbar.selected .mbar-track i { background: var(--primary-color); }
-  .avg { position: absolute; left: -3px; right: -3px; border-top: 2px dashed var(--eb-muted); }
   .mbar-label { font-size: 11px; color: var(--eb-muted); white-space: nowrap; }
   .mbar.now .mbar-label { color: var(--primary-text-color); font-weight: 600; }
-  .legend { display: flex; align-items: center; gap: 8px; padding-top: 10px; font-size: 12px; color: var(--eb-muted); }
-  .avg-key { width: 18px; border-top: 2px dashed var(--eb-muted); }
   .debit { display: grid; grid-template-columns: 88px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0;
     border-top: 1px solid var(--eb-line); font-size: 14px; }
   .debit-date { font-size: 13px; color: var(--eb-muted); }

@@ -178,25 +178,22 @@ export const renderDetail = (m, g, ctx) => {
 
 /* ---------- Debits by month ---------- */
 
-/** A bar per month (tap = its debits below); the dashed line is the monthly average of the fixed costs. */
+/** A bar per month (tap = its debits below). */
 const renderMonthBars = (s, m, ctx) => {
   const { t, fmt } = ctx;
-  const max = Math.max(...s.months.map((month) => month.total), m.costTotal, 1);
-  // the average is drawn as a dashed mark in every bar, together they form a line
-  const average = `<b class="avg" style="bottom:${(m.costTotal / max) * 100}%"></b>`;
+  const max = Math.max(...s.months.map((month) => month.total), 1);
   const bars = s.months
     .map((month, i) => {
       const label = `${fmt.monthYear(month.year, month.month)}: ${fmt.money(month.total)}`;
       const cls = `${i === 0 ? "now" : ""} ${i === ctx.month ? "selected" : ""}`;
       return `<button class="mbar ${cls}" data-action="month" data-key="${i}" aria-pressed="${i === ctx.month}" aria-label="${esc(label)}" title="${esc(label)}">
         <span class="mbar-value">${money(ctx, month.total)}</span>
-        <span class="mbar-track"><i style="height:${(month.total / max) * 100}%"></i>${average}</span>
+        <span class="mbar-track"><i style="height:${(month.total / max) * 100}%"></i></span>
         <span class="mbar-label">${esc(fmt.month(month.month))}</span>
       </button>`;
     })
     .join("");
-  const legend = `<div class="legend"><b class="avg-key"></b>${esc(t("average_month"))}</div>`;
-  return `<div class="box">${sectionHead("mdi:chart-bar", t("show_schedule"))}<div class="months">${bars}</div>${legend}</div>`;
+  return `<div class="box">${sectionHead("mdi:chart-bar", t("show_schedule"))}<div class="months">${bars}</div></div>`;
 };
 
 /** A row per debit: date, name, category (and person), amount. */
